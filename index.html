@@ -70,14 +70,14 @@
 
             <footer class="p-4 bg-gray-50 border-t sticky bottom-0">
                 <button id="manual-add-button" class="w-full mb-4 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all">
-                    手動で商品を追加
+                    バーコードの無い商品を追加する
                 </button>
                 <div class="flex justify-between items-center mb-4">
                     <span class="text-lg font-semibold text-gray-600">合計金額</span>
                     <span id="total-price" class="text-2xl font-bold text-gray-900">0円</span>
                 </div>
                 <button id="checkout-button" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:bg-gray-400">
-                    会計に進む
+                    お支払いへ進む
                 </button>
             </footer>
         </div>
@@ -86,7 +86,7 @@
         <div id="payment-screen" class="hidden">
             <header class="p-4 bg-gray-50 border-b"><h1 class="text-xl font-bold text-center text-gray-800">お支払い確認</h1></header>
             <main class="p-4">
-                <h2 class="text-lg font-semibold text-gray-700">購入商品リスト</h2>
+                <h2 class="text-lg font-semibold text-gray-700">購入商品の確認</h2>
                 <div id="final-cart-items" class="mt-2 space-y-2 max-h-60 overflow-y-auto"></div>
             </main>
             <footer class="p-4 bg-gray-50 border-t">
@@ -94,7 +94,7 @@
                     <span class="text-lg font-semibold text-gray-600">お支払い金額</span>
                     <span id="final-total-price" class="text-2xl font-bold text-gray-900">0円</span>
                 </div>
-                <button id="payment-complete-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700">支払い完了</button>
+                <button id="payment-complete-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700">お支払いを確定する</button>
                  <button id="back-to-main-button" class="w-full mt-2 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">買い物を続ける</button>
             </footer>
         </div>
