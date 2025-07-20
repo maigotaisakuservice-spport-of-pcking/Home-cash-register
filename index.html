@@ -32,34 +32,22 @@
         .transition-all {
             transition: all 0.3s ease-in-out;
         }
-        .error-message {
-            background-color: #fff5f5;
-            color: #c53030;
-            border: 1px solid #fc8181;
-            border-radius: 0.5rem;
-            padding: 1rem;
-            margin: 1rem;
-        }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
 
     <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
 
-        <!-- ===== Loading/Error Screen ===== -->
-        <div id="status-screen" class="p-8 text-center">
-            <h2 id="status-title" class="text-xl font-bold text-gray-700">接続中...</h2>
-            <p id="status-message" class="text-gray-500 mt-2">データベースに接続しています。</p>
-        </div>
-
-        <!-- ===== Main Scanning Screen ===== -->
-        <div id="main-screen" class="hidden">
+        <!-- ===== Main Scanning Screen (Always Visible) ===== -->
+        <div id="main-screen">
             <header class="p-4 bg-gray-50 border-b">
                 <h1 class="text-xl font-bold text-center text-gray-800">お家レジゴー</h1>
             </header>
 
             <main class="p-4">
-                <div id="reader" class="bg-gray-200 rounded-lg overflow-hidden shadow-inner"></div>
+                <div id="reader" class="bg-gray-200 rounded-lg overflow-hidden shadow-inner">
+                    <!-- Scanner will be rendered here -->
+                </div>
                 <p id="scan-status" class="text-center text-sm text-gray-500 mt-2">カメラをバーコードにかざしてください</p>
 
                 <div class="mt-6">
@@ -71,6 +59,9 @@
             </main>
 
             <footer class="p-4 bg-gray-50 border-t sticky bottom-0">
+                <!-- Error display area -->
+                <div id="error-display" class="text-red-600 text-center text-sm mb-2 font-medium"></div>
+
                 <div class="flex justify-between items-center mb-4">
                     <span class="text-lg font-semibold text-gray-600">合計金額</span>
                     <span id="total-price" class="text-2xl font-bold text-gray-900">0円</span>
@@ -133,7 +124,12 @@
         // TODO: ↓↓↓ あなたのFirebaseプロジェクトの設定に書き換えてください ↓↓↓
         // =================================================================================
         const firebaseConfig = {
-            
+            apiKey: "AIzaSyB-5Uze-PSCq-IhnORPNATodPcc3mmlFGo",
+            authDomain: "home-cash-register.firebaseapp.com",
+            projectId: "home-cash-register",
+            storageBucket: "home-cash-register.firebasestorage.app",
+            messagingSenderId: "741709382656",
+            appId: "1:741709382656:web:e5319982361b053800c4e5"
         };
         // =================================================================================
         
@@ -144,9 +140,6 @@
         const LOW_STOCK_THRESHOLD = 1;
 
         // --- UI Elements ---
-        const statusScreen = document.getElementById('status-screen');
-        const statusTitle = document.getElementById('status-title');
-        const statusMessage = document.getElementById('status-message');
         const mainScreen = document.getElementById('main-screen');
         const paymentScreen = document.getElementById('payment-screen');
         const cartItemsEl = document.getElementById('cart-items');
@@ -159,18 +152,8 @@
         const notificationModal = document.getElementById('notification-modal');
         const notificationMessage = document.getElementById('notification-message');
         const notificationOkButton = document.getElementById('notification-ok-button');
-
-        /**
-         * Shows an error message on the status screen.
-         */
-        function showFatalError(title, message) {
-            statusTitle.textContent = title;
-            statusMessage.innerHTML = message;
-            statusTitle.classList.add('text-red-600');
-            statusScreen.classList.remove('hidden');
-            mainScreen.classList.add('hidden');
-            paymentScreen.classList.add('hidden');
-        }
+        const errorDisplay = document.getElementById('error-display');
+        const readerEl = document.getElementById('reader');
 
         // --- Main App Logic ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -179,16 +162,13 @@
 
         async function initializeApp() {
             try {
-                // 1. Check if Firebase config is placeholder
-                if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-                    throw new Error("Firebaseのプロジェクト設定がされていません。<br>HTMLコード内の <code>firebaseConfig</code> をあなたの情報に書き換えてください。");
+                if (firebaseConfig.apiKey === "YOUR_API_KEY" || !firebaseConfig.projectId) {
+                    throw new Error("Firebase設定が正しくありません。コードを編集してください。");
                 }
 
-                // 2. Initialize Firebase
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
 
-                // 3. Initialize Scanner
                 const html5QrcodeScanner = new Html5QrcodeScanner(
                     "reader", {
                         fps: 10,
@@ -199,19 +179,22 @@
                     false
                 );
                 html5QrcodeScanner.render(onScanSuccess, onScanError);
-
-                // 4. Show the main screen
-                statusScreen.classList.add('hidden');
-                mainScreen.classList.remove('hidden');
+                
                 updateCartUI();
 
             } catch (error) {
                 console.error("Initialization failed:", error);
-                showFatalError("初期化エラー", error.message);
+                errorDisplay.innerHTML = `<strong>接続エラー:</strong> ${error.message}`;
+                readerEl.innerHTML = '<div class="p-4 text-center text-red-500">スキャナーを起動できませんでした。</div>';
+                checkoutButton.disabled = true;
             }
         }
         
         async function findProduct(janCode) {
+            if (!db) {
+                updateScanStatus('データベースに未接続です', 'red');
+                return;
+            }
             if (cart.some(item => item.janCode === janCode)) {
                 updateScanStatus('この商品はカゴにあります', 'yellow');
                 return;
@@ -231,7 +214,7 @@
                 }
             } catch (error) {
                 console.error("Error finding product:", error);
-                updateScanStatus('エラーが発生しました', 'red');
+                updateScanStatus('商品検索中にエラーが発生', 'red');
             }
         }
 
@@ -281,9 +264,9 @@
         }
 
         function updateCartUI() {
+            checkoutButton.disabled = cart.length === 0;
             if (cart.length === 0) {
                 cartItemsEl.innerHTML = '<p class="text-gray-500">商品はここに表示されます。</p>';
-                checkoutButton.disabled = true;
             } else {
                 cartItemsEl.innerHTML = cart.map(item => `
                     <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
@@ -291,7 +274,6 @@
                         <span class="font-semibold text-gray-900">${item.price}円</span>
                     </div>
                 `).join('');
-                checkoutButton.disabled = false;
             }
             totalPrice = cart.reduce((sum, item) => sum + item.price, 0);
             totalPriceEl.textContent = `${totalPrice}円`;
@@ -350,7 +332,7 @@
                 red: 'text-red-600',
                 gray: 'text-gray-500'
             };
-            scanStatusEl.className = `text-center text-sm mt-2 ${colors[color] || colors.gray}`;
+            scanStatusEl.className = `text-center text-sm mt-2 font-medium ${colors[color] || colors.gray}`;
             if (color !== 'gray') {
                 setTimeout(() => {
                     updateScanStatus('カメラをバーコードにかざしてください', 'gray');
@@ -359,12 +341,14 @@
         }
 
         // --- Event Listeners ---
-        let scanner; // To access scanner instance
+        let scanner;
         function onScanSuccess(decodedText, decodedResult) {
             if (!scanner) scanner = decodedResult.html5Qrcode;
             scanner.pause();
             findProduct(decodedText).finally(() => {
-                setTimeout(() => scanner.resume(), 1000);
+                setTimeout(() => {
+                    if (scanner) scanner.resume();
+                }, 1000);
             });
         }
 
