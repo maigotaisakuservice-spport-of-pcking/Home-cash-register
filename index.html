@@ -11,7 +11,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
     
     <!-- Barcode Scanner Library -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
@@ -31,411 +31,340 @@
             border-radius: 0.5rem;
         }
         .camera-error-message {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-            text-align: center;
-            color: #991b1b;
-            background-color: #fee2e2;
-            border-radius: 0.5rem;
-            height: 100%;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 1rem; text-align: center; color: #991b1b; background-color: #fee2e2;
+            border-radius: 0.5rem; height: 100%;
+        }
+        /* 矢印アニメーション */
+        @keyframes move-arrow {
+            0% { transform: translateX(-20px); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateX(20px); opacity: 0; }
+        }
+        .animate-arrow {
+            animation: move-arrow 1.5s ease-in-out infinite;
         }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
 
     <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div class="relative min-h-[600px]">
 
-        <!-- ===== メイン画面 ===== -->
-        <div id="main-screen">
-            <header class="p-4 bg-gray-50 border-b">
-                <h1 class="text-xl font-bold text-center text-gray-800">お家レジゴー</h1>
-            </header>
-
-            <main class="p-4 pb-0">
-                <div id="reader" class="bg-gray-200 rounded-lg overflow-hidden shadow-inner min-h-[250px] flex items-center justify-center p-4">
-                    <div class="text-center text-gray-500">カメラを初期化しています...</div>
-                </div>
-                <p id="scan-status" class="text-center text-sm text-gray-500 mt-2">カメラをバーコードにかざしてください</p>
-
-                <div class="mt-4">
-                    <h2 class="text-lg font-semibold text-gray-700">買い物カゴ</h2>
-                    <div id="cart-items" class="mt-2 space-y-2 max-h-[20vh] overflow-y-auto">
-                        <p class="text-gray-500">商品はここに表示されます。</p>
+            <!-- ===== メイン画面 (商品スキャン) ===== -->
+            <div id="main-screen" class="absolute inset-0 flex flex-col">
+                <header class="p-4 bg-gray-50 border-b"><h1 class="text-xl font-bold text-center text-gray-800">お家レジゴー</h1></header>
+                <main class="p-4 pb-0 flex-grow">
+                    <div id="reader" class="bg-gray-200 rounded-lg overflow-hidden shadow-inner min-h-[200px] flex items-center justify-center p-4">
+                        <div class="text-center text-gray-500">カメラを初期化しています...</div>
                     </div>
-                </div>
-            </main>
-
-            <footer class="p-4 bg-gray-50 border-t sticky bottom-0">
-                <button id="manual-add-button" class="w-full mb-4 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all">
-                    バーコードの無い商品を追加する
-                </button>
-                <div class="flex justify-between items-center mb-4">
-                    <span class="text-lg font-semibold text-gray-600">合計金額</span>
-                    <span id="total-price" class="text-2xl font-bold text-gray-900">0円</span>
-                </div>
-                <button id="checkout-button" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:bg-gray-400">
-                    お支払いへ進む
-                </button>
-            </footer>
-        </div>
-
-        <!-- ===== 支払い画面 ===== -->
-        <div id="payment-screen" class="hidden">
-            <header class="p-4 bg-gray-50 border-b"><h1 class="text-xl font-bold text-center text-gray-800">お支払い確認</h1></header>
-            <main class="p-4">
-                <h2 class="text-lg font-semibold text-gray-700">購入商品の確認</h2>
-                <div id="final-cart-items" class="mt-2 space-y-2 max-h-60 overflow-y-auto"></div>
-            </main>
-            <footer class="p-4 bg-gray-50 border-t">
-                 <div class="flex justify-between items-center mb-4">
-                    <span class="text-lg font-semibold text-gray-600">お支払い金額</span>
-                    <span id="final-total-price" class="text-2xl font-bold text-gray-900">0円</span>
-                </div>
-                <button id="payment-complete-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700">お支払いを確定する</button>
-                 <button id="back-to-main-button" class="w-full mt-2 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">買い物を続ける</button>
-            </footer>
-        </div>
-        
-        <!-- ===== 手動追加モーダル ===== -->
-        <div id="manual-add-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
-                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">手動で商品を追加</h3>
-                <form id="manual-add-form">
-                    <div class="space-y-4">
-                        <div>
-                            <label for="product-name" class="block text-sm font-medium text-gray-700">商品名</label>
-                            <input type="text" id="product-name" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label for="product-price" class="block text-sm font-medium text-gray-700">単価 (円)</label>
-                            <input type="number" id="product-price" required min="1" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label for="product-quantity" class="block text-sm font-medium text-gray-700">数量</label>
-                            <input type="number" id="product-quantity" value="1" min="1" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <p id="scan-status" class="text-center text-sm text-gray-500 mt-2 h-5">カメラをバーコードにかざしてください</p>
+                    <div class="mt-4">
+                        <h2 class="text-lg font-semibold text-gray-700">買い物カゴ</h2>
+                        <div id="cart-items" class="mt-2 space-y-2 max-h-[15vh] overflow-y-auto p-1">
+                            <p class="text-gray-500 p-2">商品はここに表示されます。</p>
                         </div>
                     </div>
-                    <div class="mt-6 flex justify-end space-x-3">
-                        <button type="button" id="cancel-manual-add" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50">キャンセル</button>
-                        <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">カゴに追加</button>
+                </main>
+                <footer class="p-4 bg-gray-50 border-t">
+                    <button id="manual-add-button" class="w-full mb-4 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all">手動で商品を追加</button>
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-lg font-semibold text-gray-600">合計金額</span>
+                        <span id="total-price" class="text-2xl font-bold text-gray-900">0円</span>
                     </div>
-                </form>
+                    <button id="checkout-button" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 disabled:bg-gray-400">会計に進む</button>
+                </footer>
             </div>
-        </div>
-        
-        <!-- ===== アプリ内通知 ===== -->
-        <div id="notification-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
-                <h3 class="text-lg leading-6 font-medium text-gray-900" id="notification-title">お知らせ</h3>
-                <div class="mt-2"><p class="text-sm text-gray-500" id="notification-message"></p></div>
-                <div class="mt-5"><button id="notification-ok-button" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700">OK</button></div>
+
+            <!-- ===== レジ転送画面 ===== -->
+            <div id="transfer-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-white p-8">
+                <p class="text-5xl font-black text-blue-600" id="register-number">_</p>
+                <div class="my-12">
+                    <svg class="w-24 h-24 text-blue-500 animate-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </div>
+                <p class="text-xl font-bold text-gray-700">セルフレジへ転送中...</p>
+            </div>
+
+            <!-- ===== 支払い確認画面 ===== -->
+            <div id="payment-screen" class="hidden absolute inset-0 flex flex-col">
+                <header class="p-4 bg-gray-50 border-b"><h1 class="text-xl font-bold text-center text-gray-800">お支払い確認</h1></header>
+                <main class="p-6 flex-grow">
+                    <h2 class="text-lg font-semibold text-gray-700">購入商品リスト</h2>
+                    <div id="final-cart-items" class="mt-2 space-y-2 max-h-60 overflow-y-auto p-1"></div>
+                    <div class="mt-6 border-t pt-4">
+                        <h3 class="text-lg font-semibold text-gray-700">オーナーズカード</h3>
+                        <p id="owners-card-status" class="text-sm text-gray-500 mt-1">NFCでカードを読み取ってください</p>
+                        <button id="owners-card-button" class="w-full mt-2 bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-600 transition-all">オーナーズカードを読み取る</button>
+                    </div>
+                </main>
+                <footer class="p-4 bg-gray-50 border-t">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-lg font-semibold text-gray-600">お支払い金額</span>
+                        <span id="final-total-price" class="text-2xl font-bold text-gray-900">0円</span>
+                    </div>
+                    <button id="proceed-to-payment-method-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700">お支払いへ進む</button>
+                </footer>
+            </div>
+
+            <!-- ===== 決済方法選択画面 ===== -->
+            <div id="payment-method-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-white p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-8">お支払い方法を選択</h2>
+                <div class="w-full max-w-xs space-y-4">
+                    <button data-method="クレジットカード" class="payment-method-btn w-full bg-sky-500 text-white font-bold py-4 px-4 rounded-lg shadow-md hover:bg-sky-600 transition-all text-lg">クレジットカード</button>
+                    <button data-method="交通系IC" class="payment-method-btn w-full bg-emerald-500 text-white font-bold py-4 px-4 rounded-lg shadow-md hover:bg-emerald-600 transition-all text-lg">交通系IC</button>
+                    <button data-method="TAROCard" class="payment-method-btn w-full bg-orange-500 text-white font-bold py-4 px-4 rounded-lg shadow-md hover:bg-orange-600 transition-all text-lg">TARO Card</button>
+                </div>
+            </div>
+
+            <!-- ===== 決済スキャン画面 ===== -->
+            <div id="payment-scan-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-white p-8">
+                <h2 id="payment-scan-title" class="text-2xl font-bold text-gray-800 mb-6"></h2>
+                <div class="w-32 h-32 text-gray-400 mb-6">
+                    <!-- NFC Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 256 256"><path d="M208,32H96A56,56,0,0,0,40,88v80a56,56,0,0,0,56,56H172.43a8,8,0,0,0,7.16-4.42l48-96A8,8,0,0,0,224,112V40A8,8,0,0,0,216,32Zm0,72L176,184H96a40,40,0,0,1-40-40V88A40,40,0,0,1,96,48H208Z" opacity="0.2"></path><path d="M224,120.85a15.84,15.84,0,0,0-5.16-11.28l-48-48A16,16,0,0,0,160,56H96A48,48,0,0,0,48,104v64a48,48,0,0,0,48,48h76.43a16,16,0,0,0,14.31-8.84l48-96A16,16,0,0,0,224,120.85ZM180.69,192H96a32,32,0,0,1-32-32V104a32,32,0,0,1,32-32h58.34L212.69,128Z"></path></svg>
+                </div>
+                <p class="text-xl font-bold text-gray-700">カードをスキャン中...</p>
+                <p class="text-sm text-gray-500 mt-2">スマートフォンを決済端末にかざしてください</p>
+                <button id="nfc-fallback-button" class="mt-8 bg-gray-200 text-gray-700 py-2 px-4 rounded-lg">NFC非対応の場合はここをタップ</button>
+            </div>
+
+            <!-- ===== 支払い完了画面 ===== -->
+            <div id="complete-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-white p-8 text-center">
+                <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6">
+                    <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">お支払いが完了しました</h2>
+                <p class="text-gray-600 mt-2">ありがとうございました！</p>
+                <div id="qr-code-placeholder" class="mt-8 p-4 bg-white border rounded-lg shadow-sm">
+                    <!-- Dummy QR Code -->
+                    <svg width="128" height="128" viewBox="0 0 100 100"><rect width="100" height="100" fill="#f3f4f6"/><path fill="#1f2937" d="M10,10h20v20h-20z M40,10h20v20h-20z M70,10h20v20h-20z M10,40h20v20h-20z M40,40h20v20h-20z M70,40h20v20h-20z M10,70h20v20h-20z M40,70h20v20h-20z M70,70h20v20h-20z M15,15v10h10v-10z M45,15v10h10v-10z M75,15v10h10v-10z M15,45v10h10v-10z M45,45v10h10v-10z M75,45v10h10v-10z M15,75v10h10v-10z M45,75v10h10v-10z M75,75v10h10v-10z"/></svg>
+                </div>
+                <p id="redirect-message" class="text-gray-500 mt-4 text-sm"></p>
+            </div>
+            
+            <!-- Modals (Notification and Manual Add) -->
+            <div id="manual-add-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                <!-- ... manual add modal content ... -->
+            </div>
+            <div id="notification-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                <!-- ... notification modal content ... -->
             </div>
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, getDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyB-5Uze-PSCq-IhnORPNATodPcc3mmlFGo",
-            authDomain: "home-cash-register.firebaseapp.com",
-            projectId: "home-cash-register",
-            storageBucket: "home-cash-register.appspot.com",
-            messagingSenderId: "741709382656",
-            appId: "1:741709382656:web:e5319982361b053800c4e5"
-        };
-        
+        // --- Configuration and State ---
+        const firebaseConfig = { /* Your Firebase Config */ };
         let db;
         let html5QrcodeScanner;
         let cart = [];
-        const LOW_STOCK_THRESHOLD = 1;
+        let ownersCardApplied = false;
         
+        // --- UI Element Mapping ---
         const UI = {
             mainScreen: document.getElementById('main-screen'),
             paymentScreen: document.getElementById('payment-screen'),
+            transferScreen: document.getElementById('transfer-screen'),
+            paymentMethodScreen: document.getElementById('payment-method-screen'),
+            paymentScanScreen: document.getElementById('payment-scan-screen'),
+            completeScreen: document.getElementById('complete-screen'),
+            // ... other UI elements
             cartItems: document.getElementById('cart-items'),
             totalPrice: document.getElementById('total-price'),
             checkoutButton: document.getElementById('checkout-button'),
             scanStatus: document.getElementById('scan-status'),
             reader: document.getElementById('reader'),
             manualAddButton: document.getElementById('manual-add-button'),
-            manualAddModal: document.getElementById('manual-add-modal'),
-            manualAddForm: document.getElementById('manual-add-form'),
-            cancelManualAdd: document.getElementById('cancel-manual-add'),
+            registerNumber: document.getElementById('register-number'),
             finalCartItems: document.getElementById('final-cart-items'),
             finalTotalPrice: document.getElementById('final-total-price'),
-            paymentCompleteButton: document.getElementById('payment-complete-button'),
-            backToMainButton: document.getElementById('back-to-main-button'),
-            notificationModal: document.getElementById('notification-modal'),
-            notificationTitle: document.getElementById('notification-title'),
-            notificationMessage: document.getElementById('notification-message'),
-            notificationOkButton: document.getElementById('notification-ok-button'),
+            ownersCardStatus: document.getElementById('owners-card-status'),
+            ownersCardButton: document.getElementById('owners-card-button'),
+            proceedToPaymentMethodButton: document.getElementById('proceed-to-payment-method-button'),
+            paymentMethodButtons: document.querySelectorAll('.payment-method-btn'),
+            paymentScanTitle: document.getElementById('payment-scan-title'),
+            nfcFallbackButton: document.getElementById('nfc-fallback-button'),
+            redirectMessage: document.getElementById('redirect-message'),
         };
 
+        // --- Initialization ---
         document.addEventListener('DOMContentLoaded', init);
 
         async function init() {
+            // Hide all screens initially, then show the main one
+            document.querySelectorAll('.absolute').forEach(el => el.classList.add('hidden'));
+            UI.mainScreen.classList.remove('hidden');
+
             try {
                 if (location.protocol !== 'https:') {
-                    throw new Error("カメラ機能には安全な接続(HTTPS)が必要です。");
+                    throw new Error("カメラやNFC機能には安全な接続(HTTPS)が必要です。");
                 }
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
+                // const app = initializeApp(firebaseConfig);
+                // db = getFirestore(app);
                 setupScanner();
                 setupEventListeners();
                 updateCartUI();
             } catch (error) {
                 console.error("初期化エラー:", error);
                 displayCameraError(error.message);
-                UI.checkoutButton.disabled = true;
             }
         }
 
         function setupScanner() {
-            const formatsToSupport = [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8];
-            html5QrcodeScanner = new Html5QrcodeScanner("reader", {
-                fps: 10,
-                qrbox: (w, h) => ({ width: Math.floor(w * 0.9), height: Math.floor(h * 0.4) }),
-                facingMode: "environment",
-                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-                formatsToSupport: formatsToSupport
-            }, false);
-            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+             try {
+                const formatsToSupport = [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8];
+                html5QrcodeScanner = new Html5QrcodeScanner("reader", {
+                    fps: 10,
+                    qrbox: (w, h) => ({ width: Math.floor(w * 0.9), height: Math.floor(h * 0.4) }),
+                    facingMode: "environment",
+                    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+                    formatsToSupport: formatsToSupport,
+                    aspectRatio: 1.0
+                }, false);
+                html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+            } catch (e) {
+                displayCameraError("カメラのセットアップに失敗しました。");
+            }
         }
 
         function setupEventListeners() {
-            UI.manualAddButton.addEventListener('click', () => UI.manualAddModal.classList.remove('hidden'));
-            UI.cancelManualAdd.addEventListener('click', () => UI.manualAddModal.classList.add('hidden'));
-            UI.manualAddForm.addEventListener('submit', handleManualAdd);
-            UI.checkoutButton.addEventListener('click', showPaymentScreen);
-            UI.paymentCompleteButton.addEventListener('click', handlePaymentCompletion);
-            UI.backToMainButton.addEventListener('click', showMainScreen);
-            UI.notificationOkButton.addEventListener('click', () => UI.notificationModal.classList.add('hidden'));
-        }
-        
-        function onScanSuccess(decodedText) {
-            if (html5QrcodeScanner.getState() !== Html5QrcodeScannerState.SCANNING) return;
-            html5QrcodeScanner.pause();
-            findProduct(decodedText).finally(() => {
-                setTimeout(() => {
-                    if (html5QrcodeScanner?.getState() === Html5QrcodeScannerState.PAUSED) {
-                        html5QrcodeScanner.resume();
-                    }
-                }, 1000);
+            UI.checkoutButton.addEventListener('click', showTransferScreen);
+            UI.ownersCardButton.addEventListener('click', () => handleNfcScan('owners'));
+            UI.proceedToPaymentMethodButton.addEventListener('click', showPaymentMethodScreen);
+            UI.paymentMethodButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const method = btn.dataset.method;
+                    showPaymentScanScreen(method);
+                });
+            });
+            UI.nfcFallbackButton.addEventListener('click', () => {
+                 // This simulates a successful NFC scan for environments that don't support it.
+                 showNotification('NFCスキャン成功 (疑似)', 'カードが正常に読み取られました。');
+                 setTimeout(showCompleteScreen, 1000);
             });
         }
-
-        function onScanFailure(error) { handleCameraError(error); }
-
-        function handleCameraError(error) {
-            let message = "スキャナーで不明なエラーが発生しました。";
-            const errorStr = typeof error === 'string' ? error : error.name || error.message;
-            if (!errorStr || errorStr.toLowerCase().includes("not found")) return;
-
-            if (errorStr.includes("NotAllowedError")) message = "カメラへのアクセスが拒否されました。ブラウザの設定で許可してください。";
-            else if (errorStr.includes("NotFoundError")) message = "利用可能なカメラが見つかりませんでした。";
-            else if (errorStr.includes("NotReadableError")) message = "カメラを起動できませんでした。他のアプリで使用されている可能性があります。";
-            
-            displayCameraError(message);
-            html5QrcodeScanner?.clear().catch(err => console.error("スキャナのクリアに失敗", err));
-        }
-
-        function displayCameraError(message) {
-            UI.reader.innerHTML = `<div class="camera-error-message"><p class="font-semibold">カメラエラー</p><p class="text-sm mt-1">${message}</p></div>`;
-            UI.scanStatus.textContent = "スキャナーを開始できませんでした。";
-            UI.scanStatus.className = 'text-center text-sm mt-2 font-medium text-red-600';
-        }
-
-        async function findProduct(janCode) {
-            updateScanStatus(`${janCode} を検索中...`, 'blue');
-            const existingItem = cart.find(item => item.id === janCode);
-            if (existingItem) {
-                addToCart(existingItem, 1);
-                updateScanStatus(`${existingItem.name} の数量を追加しました`, 'green');
-                return;
-            }
-            const productRef = doc(db, "products", janCode);
-            try {
-                const docSnap = await getDoc(productRef);
-                if (docSnap.exists()) {
-                    const productData = { ...docSnap.data(), id: janCode };
-                    addToCart(productData, 1);
-                    updateScanStatus(`${productData.name} を追加しました`, 'green');
-                } else {
-                    await fetchProductFromApi(janCode);
-                }
-            } catch (error) {
-                console.error("商品検索エラー:", error);
-                updateScanStatus('商品検索中にエラーが発生', 'red');
-            }
-        }
-
-        async function fetchProductFromApi(janCode) {
-            updateScanStatus(`商品情報を検索中...`, 'blue');
-            try {
-                const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${janCode}`);
-                if (!response.ok) throw new Error('API request failed');
-                const data = await response.json();
-
-                if (data.status === 1 && data.product) {
-                    const productName = data.product.product_name_ja || data.product.product_name || "名称不明";
-                    const priceInput = prompt(`${productName}\n\nこの商品の価格(円)を入力してください:`, "100");
-                    const price = parseInt(priceInput, 10);
-
-                    if (!isNaN(price) && price > 0) {
-                        const newProduct = { name: productName, price, imageUrl: data.product.image_front_url || null };
-                        await setDoc(doc(db, "products", janCode), newProduct);
-                        await setDoc(doc(db, "inventory", janCode), { name: newProduct.name, quantity: 1 });
-                        addToCart({ ...newProduct, id: janCode }, 1);
-                        updateScanStatus(`${newProduct.name} を新規登録・追加しました`, 'green');
-                    } else {
-                        updateScanStatus('登録をキャンセルしました', 'yellow');
-                    }
-                } else {
-                    updateScanStatus(`商品情報が見つかりません (JAN: ${janCode})`, 'red');
-                }
-            } catch (error) {
-                console.error("API fetch error:", error);
-                updateScanStatus('外部APIへの接続エラー', 'red');
-            }
-        }
-
-        function handleManualAdd(event) {
-            event.preventDefault();
-            const name = UI.manualAddForm.querySelector('#product-name').value;
-            const price = parseInt(UI.manualAddForm.querySelector('#product-price').value, 10);
-            const quantity = parseInt(UI.manualAddForm.querySelector('#product-quantity').value, 10);
-
-            if (name && price > 0 && quantity > 0) {
-                const manualProduct = { id: `manual_${Date.now()}`, name, price, isManual: true };
-                addToCart(manualProduct, quantity);
-                UI.manualAddModal.classList.add('hidden');
-                UI.manualAddForm.reset();
-                UI.manualAddForm.querySelector('#product-quantity').value = 1;
-            } else {
-                alert('商品名、価格、数量を正しく入力してください。');
-            }
-        }
-
-        function addToCart(product, quantity) {
-            const existingItem = cart.find(item => item.id === product.id);
-            if (existingItem) {
-                existingItem.quantity += quantity;
-            } else {
-                cart.push({ ...product, quantity: quantity });
-            }
-            updateCartUI();
-            speak(`${product.name}、${quantity}点、カゴに追加しました`);
-        }
-
-        function updateCartUI() {
-            UI.checkoutButton.disabled = cart.length === 0;
-            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            UI.totalPrice.textContent = `${totalPrice.toLocaleString()}円`;
-
-            if (cart.length === 0) {
-                UI.cartItems.innerHTML = '<p class="text-gray-500">商品はここに表示されます。</p>';
-                return;
-            }
-            
-            UI.cartItems.innerHTML = cart.map(item => {
-                const subtotal = item.price * item.quantity;
-                return `
-                <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
-                    <div>
-                        <span class="font-medium text-gray-800">${item.name}</span>
-                        <span class="text-sm text-gray-500 ml-2">${item.quantity}点 × ${item.price.toLocaleString()}円</span>
-                    </div>
-                    <span class="font-semibold text-gray-900">${subtotal.toLocaleString()}円</span>
-                </div>`;
-            }).join('');
+        
+        // --- Screen Navigation ---
+        function showScreen(screenToShow) {
+            document.querySelectorAll('.absolute').forEach(el => el.classList.add('hidden'));
+            screenToShow.classList.remove('hidden');
         }
         
-        function resetCart() {
-            cart = [];
-            updateCartUI();
+        function showTransferScreen() {
+            if (cart.length === 0) return;
+            const randomReg = Math.floor(Math.random() * 8) + 1;
+            UI.registerNumber.textContent = `${randomReg}番`;
+            showScreen(UI.transferScreen);
+            setTimeout(() => {
+                showPaymentScreen();
+            }, 3000); // 3秒後に支払い確認画面へ
         }
 
         function showPaymentScreen() {
-            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            UI.finalTotalPrice.textContent = `${totalPrice.toLocaleString()}円`;
+            UI.finalTotalPrice.textContent = UI.totalPrice.textContent;
             UI.finalCartItems.innerHTML = UI.cartItems.innerHTML;
-            UI.mainScreen.classList.add('hidden');
-            UI.paymentScreen.classList.remove('hidden');
+            showScreen(UI.paymentScreen);
         }
 
-        function showMainScreen() {
-            UI.paymentScreen.classList.add('hidden');
-            UI.mainScreen.classList.remove('hidden');
+        function showPaymentMethodScreen() {
+            showScreen(UI.paymentMethodScreen);
         }
 
-        async function handlePaymentCompletion() {
-            UI.paymentCompleteButton.disabled = true;
-            UI.paymentCompleteButton.textContent = '処理中...';
-            await finalizePurchase();
-            showNotification('支払い完了', 'ありがとうございました！');
-            resetCart();
-            showMainScreen();
-            UI.paymentCompleteButton.disabled = false;
-            UI.paymentCompleteButton.textContent = '支払い完了';
+        function showPaymentScanScreen(method) {
+            UI.paymentScanTitle.textContent = `${method}で支払い`;
+            showScreen(UI.paymentScanScreen);
+            handleNfcScan('payment');
         }
 
-        async function finalizePurchase() {
-            const lowStockItems = [];
-            try {
-                await runTransaction(db, async (transaction) => {
-                    for (const item of cart) {
-                        if (item.isManual) continue;
-                        const inventoryRef = doc(db, "inventory", item.id);
-                        const inventoryDoc = await transaction.get(inventoryRef);
-                        if (inventoryDoc.exists()) {
-                            const newQuantity = inventoryDoc.data().quantity - item.quantity;
-                            transaction.update(inventoryRef, { quantity: newQuantity });
-                            if (newQuantity <= LOW_STOCK_THRESHOLD) {
-                                lowStockItems.push(item.name);
-                            }
-                        }
-                    }
-                });
-                if (lowStockItems.length > 0) {
-                    setTimeout(() => {
-                        showNotification('在庫アラート', `${lowStockItems.join('、')} の在庫が少なくなっています。`);
-                    }, 1000); // 支払い完了通知の後に表示
+        function showCompleteScreen() {
+            showScreen(UI.completeScreen);
+            let countdown = 5;
+            UI.redirectMessage.textContent = `${countdown}秒後にメイン画面に戻ります...`;
+            const interval = setInterval(() => {
+                countdown--;
+                UI.redirectMessage.textContent = `${countdown}秒後にメイン画面に戻ります...`;
+                if (countdown <= 0) {
+                    clearInterval(interval);
+                    resetApp();
                 }
-            } catch (error) {
-                console.error("会計処理エラー:", error);
-                showNotification('エラー', '会計処理中にエラーが発生しました。');
-            }
+            }, 1000);
         }
+
+        // --- Core Logic ---
         
-        function showNotification(title, message) {
-            UI.notificationTitle.textContent = title;
-            UI.notificationMessage.textContent = message;
-            UI.notificationModal.classList.remove('hidden');
-        }
+        async function handleNfcScan(type) {
+            const statusElement = type === 'owners' ? UI.ownersCardStatus : null;
+            const buttonElement = type === 'owners' ? UI.ownersCardButton : null;
 
-        function speak(text) {
-            if ('speechSynthesis' in window) {
-                speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'ja-JP';
-                speechSynthesis.speak(utterance);
+            if (!('NDEFReader' in window)) {
+                const message = "お使いのブラウザはNFCに対応していません。ボタンを再度タップすると、疑似的に成功します。";
+                if (statusElement) statusElement.textContent = message;
+                showNotification('NFC非対応', message);
+                // Fallback for non-NFC browsers
+                if (buttonElement) {
+                    buttonElement.onclick = () => {
+                        if (type === 'owners') {
+                            ownersCardApplied = true;
+                            statusElement.textContent = 'オーナーズカード適用済み (疑似)';
+                            statusElement.classList.add('text-green-600', 'font-bold');
+                            buttonElement.disabled = true;
+                        } else { // payment
+                            setTimeout(showCompleteScreen, 500);
+                        }
+                    };
+                }
+                return;
+            }
+
+            try {
+                const ndef = new NDEFReader();
+                await ndef.scan();
+                if (statusElement) statusElement.textContent = 'スキャン待機中... スマートフォンをカードに近づけてください。';
+
+                ndef.addEventListener("reading", ({ message, serialNumber }) => {
+                    console.log(`> Serial Number: ${serialNumber}`);
+                    console.log(`> Records: (${message.records.length})`);
+                    
+                    if (type === 'owners') {
+                        ownersCardApplied = true;
+                        statusElement.textContent = 'オーナーズカードが正常に読み取られました！';
+                        statusElement.classList.add('text-green-600', 'font-bold');
+                        if(buttonElement) buttonElement.disabled = true;
+                        showNotification('成功', 'オーナーズカードを認識しました。');
+                    } else { // payment
+                        showNotification('決済成功', 'お支払いが承認されました。');
+                        setTimeout(showCompleteScreen, 1000);
+                    }
+                    // Stop scanning after a successful read
+                    ndef.scan().stop();
+                });
+
+            } catch (error) {
+                console.error(`NFCスキャンエラー: ${error}`);
+                if (statusElement) statusElement.textContent = `エラー: ${error.message}`;
+                showNotification('NFCエラー', `スキャンを開始できませんでした。${error.message}`);
             }
         }
 
-        function updateScanStatus(message, color) {
-            UI.scanStatus.textContent = message;
-            const colors = { blue: 'text-blue-600', green: 'text-green-600', yellow: 'text-yellow-600', red: 'text-red-600', gray: 'text-gray-500' };
-            UI.scanStatus.className = `text-center text-sm mt-2 font-medium ${colors[color] || colors.gray}`;
-            if (color !== 'gray') {
-                setTimeout(() => updateScanStatus('カメラをバーコードにかざしてください', 'gray'), 3000);
+        function resetApp() {
+            cart = [];
+            ownersCardApplied = false;
+            updateCartUI();
+            
+            // Reset owners card UI
+            UI.ownersCardStatus.textContent = 'NFCでカードを読み取ってください';
+            UI.ownersCardStatus.classList.remove('text-green-600', 'font-bold');
+            UI.ownersCardButton.disabled = false;
+            UI.ownersCardButton.onclick = () => handleNfcScan('owners');
+
+            showScreen(UI.mainScreen);
+            // Re-initialize scanner if it was cleared
+            if (html5QrcodeScanner && html5QrcodeScanner.getState() === Html5QrcodeScannerState.NOT_STARTED) {
+                 setupScanner();
             }
         }
-    </script>
-</body>
-</html>
+
+        // --- Helper Functions (Ba
