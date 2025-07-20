@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>お家レジゴー</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter for a clean look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- html5-qrcode library for barcode scanning -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <style>
+        /* Use a mix of Inter for numbers/latin and Noto Sans JP for Japanese */
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            -webkit-tap-highlight-color: transparent; /* Disable tap highlight on mobile */
+        }
+        /* Custom styling for the scanner video element */
+        #reader video {
+            width: 100% !important;
+            height: auto !important;
+            border-radius: 0.5rem; /* 8px */
+        }
+        /* Custom styling for the scanner region box */
+        #reader div[style*="border"] {
+            border-radius: 0.5rem;
+        }
+        /* Simple transition for smoother UI changes */
+        .transition-all {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+
+        <!-- ===== Loading Screen ===== -->
+        <div id="loading-screen" class="p-8 text-center">
+            <h2 class="text-xl font-bold text-gray-700">接続中...</h2>
+            <p class="text-gray-500 mt-2">データベースに接続しています。</p>
+        </div>
+
+        <!-- ===== Main Scanning Screen ===== -->
+        <div id="main-screen" class="hidden">
+            <header class="p-4 bg-gray-50 border-b">
+                <h1 class="text-xl font-bold text-center text-gray-800">お家レジゴー</h1>
+            </header>
+
+            <main class="p-4">
+                <!-- Barcode Scanner View -->
+                <div id="reader" class="bg-gray-200 rounded-lg overflow-hidden shadow-inner"></div>
+                <p id="scan-status" class="text-center text-sm text-gray-500 mt-2">カメラをバーコードにかざしてください</p>
+
+                <!-- Shopping Cart -->
+                <div class="mt-6">
+                    <h2 class="text-lg font-semibold text-gray-700">買い物カゴ</h2>
+                    <div id="cart-items" class="mt-2 space-y-2">
+                        <p class="text-gray-500">商品はここに表示されます。</p>
+                    </div>
+                </div>
+            </main>
+
+            <footer class="p-4 bg-gray-50 border-t sticky bottom-0">
+                <div class="flex justify-between items-center mb-4">
+                    <span class="text-lg font-semibold text-gray-600">合計金額</span>
+                    <span id="total-price" class="text-2xl font-bold text-gray-900">0円</span>
+                </div>
+                <button id="checkout-button" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all disabled:bg-gray-400">
+                    会計に進む
+                </button>
+            </footer>
+        </div>
+
+        <!-- ===== Payment Screen ===== -->
+        <div id="payment-screen" class="hidden">
+            <header class="p-4 bg-gray-50 border-b">
+                <h1 class="text-xl font-bold text-center text-gray-800">お支払い確認</h1>
+            </header>
+            
+            <main class="p-4">
+                <h2 class="text-lg font-semibold text-gray-700">購入商品リスト</h2>
+                <div id="final-cart-items" class="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                    <!-- Final list will be populated here -->
+                </div>
+            </main>
+
+            <footer class="p-4 bg-gray-50 border-t">
+                 <div class="flex justify-between items-center mb-4">
+                    <span class="text-lg font-semibold text-gray-600">お支払い金額</span>
+                    <span id="final-total-price" class="text-2xl font-bold text-gray-900">0円</span>
+                </div>
+                <button id="payment-complete-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all">
+                    支払い完了
+                </button>
+            </footer>
+        </div>
+        
+        <!-- ===== In-App Notification Modal ===== -->
+        <div id="notification-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100">
+                    <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mt-4" id="notification-title">在庫アラート</h3>
+                <div class="mt-2">
+                    <p class="text-sm text-gray-500" id="notification-message">
+                        <!-- Message will be set by JavaScript -->
+                    </p>
+                </div>
+                <div class="mt-5">
+                    <button id="notification-ok-button" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm">
+                        OK
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // =================================================================================
+        // TODO: ↓↓↓ あなたのFirebaseプロジェクトの設定に書き換えてください ↓↓↓
+        // =================================================================================
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        // =================================================================================
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // --- Global State ---
+        let cart = [];
+        let totalPrice = 0;
+        const LOW_STOCK_THRESHOLD = 1; // 在庫がこの数を下回ったら通知
+
+        // --- UI Elements ---
+        const loadingScreen = document.getElementById('loading-screen');
+        const mainScreen = document.getElementById('main-screen');
+        const paymentScreen = document.getElementById('payment-screen');
+        const cartItemsEl = document.getElementById('cart-items');
+        const totalPriceEl = document.getElementById('total-price');
+        const checkoutButton = document.getElementById('checkout-button');
+        const paymentCompleteButton = document.getElementById('payment-complete-button');
+        const finalCartItemsEl = document.getElementById('final-cart-items');
+        const finalTotalPriceEl = document.getElementById('final-total-price');
+        const scanStatusEl = document.getElementById('scan-status');
+
+        // --- Notification Modal Elements ---
+        const notificationModal = document.getElementById('notification-modal');
+        const notificationMessage = document.getElementById('notification-message');
+        const notificationOkButton = document.getElementById('notification-ok-button');
+
+        // --- Scanner Initialization ---
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", 
+            { 
+                fps: 10, 
+                qrbox: { width: 250, height: 150 },
+                rememberLastUsedCamera: true, // Remember the last used camera
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+            },
+            /* verbose= */ false
+        );
+
+        // --- Core Functions ---
+
+        /**
+         * Finds a product by its JAN code, first in Firestore, then via external API.
+         * @param {string} janCode - The scanned JAN code.
+         */
+        async function findProduct(janCode) {
+            if (cart.some(item => item.janCode === janCode)) {
+                scanStatusEl.textContent = 'この商品はカゴにあります';
+                scanStatusEl.className = 'text-center text-sm text-yellow-600 mt-2';
+                setTimeout(() => {
+                    scanStatusEl.textContent = 'カメラをバーコードにかざしてください';
+                    scanStatusEl.className = 'text-center text-sm text-gray-500 mt-2';
+                }, 2000);
+                return;
+            }
+            
+            scanStatusEl.textContent = `${janCode} を検索中...`;
+            scanStatusEl.className = 'text-center text-sm text-blue-600 mt-2';
+
+            const productRef = doc(db, "products", janCode);
+            try {
+                const docSnap = await getDoc(productRef);
+                if (docSnap.exists()) {
+                    // Product found in our Firestore DB
+                    const productData = docSnap.data();
+                    productData.janCode = janCode;
+                    addToCart(productData);
+                    scanStatusEl.textContent = `${productData.name} を追加しました`;
+                    scanStatusEl.className = 'text-center text-sm text-green-600 mt-2';
+                } else {
+                    // Product not in Firestore, try external API
+                    await fetchProductFromApi(janCode);
+                }
+            } catch (error) {
+                console.error("Error finding product:", error);
+                scanStatusEl.textContent = 'エラーが発生しました';
+                scanStatusEl.className = 'text-center text-sm text-red-600 mt-2';
+            } finally {
+                 setTimeout(() => {
+                    scanStatusEl.textContent = 'カメラをバーコードにかざしてください';
+                    scanStatusEl.className = 'text-center text-sm text-gray-500 mt-2';
+                }, 2000);
+            }
+        }
+
+        /**
+         * Fetches product data from Open Food Facts API.
+         * @param {string} janCode - The JAN code to look up.
+         */
+        async function fetchProductFromApi(janCode) {
+            try {
+                const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${janCode}`);
+                if (!response.ok) throw new Error('API request failed');
+                
+                const data = await response.json();
+
+                if (data.status === 1 && data.product) {
+                    const priceInput = prompt(`${data.product.product_name_ja || data.product.product_name}\n\nこの商品の価格(円)を入力してください:`, "100");
+                    const price = parseInt(priceInput, 10);
+
+                    if (!isNaN(price) && price > 0) {
+                        const newProduct = {
+                            name: data.product.product_name_ja || data.product.product_name || "名称不明",
+                            price: price,
+                            imageUrl: data.product.image_front_url || null
+                        };
+
+                        // Save to 'products' collection
+                        await setDoc(doc(db, "products", janCode), newProduct);
+
+                        // Also initialize in 'inventory' collection
+                        await setDoc(doc(db, "inventory", janCode), {
+                            name: newProduct.name,
+                            quantity: 1 // Initialize with quantity 1
+                        });
+                        
+                        newProduct.janCode = janCode;
+                        addToCart(newProduct);
+                        scanStatusEl.textContent = `${newProduct.name} を新規登録・追加しました`;
+                        scanStatusEl.className = 'text-center text-sm text-green-600 mt-2';
+
+                    } else {
+                        alert("無効な価格です。");
+                    }
+                } else {
+                    alert(`商品情報が見つかりませんでした (JAN: ${janCode})。手動での登録は未実装です。`);
+                }
+            } catch (error) {
+                console.error("API fetch error:", error);
+                alert("外部APIへの接続中にエラーが発生しました。");
+            }
+        }
+
+        /**
+         * Adds a product to the cart and updates the UI.
+         * @param {object} product - The product object to add.
+         */
+        function addToCart(product) {
+            cart.push(product);
+            updateCartUI();
+            speak(`${product.name}、1点、${product.price}円を追加しました`);
+        }
+
+        /**
+         * Updates the shopping cart UI and total price.
+         */
+        function updateCartUI() {
+            if (cart.length === 0) {
+                cartItemsEl.innerHTML = '<p class="text-gray-500">商品はここに表示されます。</p>';
+                checkoutButton.disabled = true;
+            } else {
+                cartItemsEl.innerHTML = cart.map(item => `
+                    <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
+                        <span class="font-medium text-gray-800">${item.name}</span>
+                        <span class="font-semibold text-gray-900">${item.price}円</span>
+                    </div>
+                `).join('');
+                checkoutButton.disabled = false;
+            }
+            totalPrice = cart.reduce((sum, item) => sum + item.price, 0);
+            totalPriceEl.textContent = `${totalPrice}円`;
+        }
+        
+        /**
+         * Resets the cart to an empty state.
+         */
+        function resetCart() {
+            cart = [];
+            totalPrice = 0;
+            updateCartUI();
+        }
+
+        /**
+         * Uses the Web Speech API to announce text.
+         * @param {string} text - The text to speak.
+         */
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ja-JP';
+                speechSynthesis.speak(utterance);
+            }
+        }
+        
+        /**
+         * Finalizes the purchase, updates inventory, and checks for low stock.
+         */
+        async function finalizePurchase() {
+            const lowStockItems = [];
+            
+            try {
+                await runTransaction(db, async (transaction) => {
+                    for (const item of cart) {
+                        const inventoryRef = doc(db, "inventory", item.janCode);
+                        const inventoryDoc = await transaction.get(inventoryRef);
+
+                        if (!inventoryDoc.exists()) {
+                            // This case shouldn't happen if we add to inventory on first scan
+                            transaction.set(inventoryRef, { name: item.name, quantity: 0 });
+                            lowStockItems.push(item.name);
+                        } else {
+                            const newQuantity = inventoryDoc.data().quantity - 1;
+                            transaction.update(inventoryRef, { quantity: newQuantity });
+                            
+                            if (newQuantity <= LOW_STOCK_THRESHOLD) {
+                                lowStockItems.push(item.name);
+                            }
+                        }
+                    }
+                });
+
+                console.log("Transaction successfully committed!");
+                // Show notifications for low stock items after transaction is successful
+                if (lowStockItems.length > 0) {
+                    const message = `${lowStockItems.join('、')} の在庫が少なくなっています。`;
+                    showNotification(message);
+                }
+
+            } catch (error) {
+                console.error("Transaction failed: ", error);
+                alert("会計処理中にエラーが発生しました。");
+            }
+        }
+        
+        /**
+         * Shows the in-app notification modal.
+         * @param {string} message - The message to display.
+         */
+        function showNotification(message) {
+            notificationMessage.textContent = message;
+            notificationModal.classList.remove('hidden');
+        }
+
+        // --- Event Listeners ---
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // Stop scanning briefly to prevent multiple scans of the same item
+            html5QrcodeScanner.pause();
+            findProduct(decodedText);
+            setTimeout(() => {
+                html5QrcodeScanner.resume();
+            }, 2000);
+        }
+
+        function onScanError(errorMessage) {
+            // handle scan error, usually safe to ignore.
+        }
+
+        checkoutButton.addEventListener('click', () => {
+            mainScreen.classList.add('hidden');
+            paymentScreen.classList.remove('hidden');
+            
+            // Populate final cart view
+            finalCartItemsEl.innerHTML = cartItemsEl.innerHTML;
+            finalTotalPriceEl.textContent = `${totalPrice}円`;
+        });
+
+        paymentCompleteButton.addEventListener('click', async () => {
+            paymentCompleteButton.disabled = true;
+            paymentCompleteButton.textContent = '処理中...';
+
+            await finalizePurchase();
+            
+            resetCart();
+            
+            paymentScreen.classList.add('hidden');
+            mainScreen.classList.remove('hidden');
+            
+            paymentCompleteButton.disabled = false;
+            paymentCompleteButton.textContent = '支払い完了';
+        });
+
+        notificationOkButton.addEventListener('click', () => {
+            notificationModal.classList.add('hidden');
+        });
+
+        // --- App Initialization ---
+        functioninitializeApp() {
+            // A simple check to see if Firebase config is placeholder
+            if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+                document.body.innerHTML = `
+                    <div class="p-8 text-center text-red-600">
+                        <h2 class="text-xl font-bold">設定エラー</h2>
+                        <p class="mt-2">Firebaseのプロジェクト設定がされていません。<br>HTMLコード内の <code>firebaseConfig</code> をあなたの情報に書き換えてください。</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            loadingScreen.classList.add('hidden');
+            mainScreen.classList.remove('hidden');
+            updateCartUI();
+            html5QrcodeScanner.render(onScanSuccess, onScanError);
+        }
+
+        // Start the application
+        initializeApp();
+
+    </script>
+</body>
+</html>
+
