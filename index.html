@@ -229,6 +229,26 @@
                 displayCameraError("カメラのセットアップに失敗しました。");
             }
         }
+        /**
+         * Handles the submission of the manual product entry form.
+         * @param {Event} event - The form submission event.
+         */
+        function handleManualAdd(event) {
+            event.preventDefault();
+            const name = UI.manualAddForm.querySelector('#product-name').value;
+            const price = parseInt(UI.manualAddForm.querySelector('#product-price').value, 10);
+            const quantity = parseInt(UI.manualAddForm.querySelector('#product-quantity').value, 10);
+
+            if (name && price > 0 && quantity > 0) {
+                const manualProduct = { id: `manual_${Date.now()}`, name, price, isManual: true };
+                addToCart(manualProduct, quantity);
+                UI.manualAddModal.classList.add('hidden');
+                UI.manualAddForm.reset();
+                UI.manualAddForm.querySelector('#product-quantity').value = 1;
+            } else {
+                showNotification('入力エラー', '商品名、価格、数量を正しく入力してください。');
+            }
+        }
 
         function setupEventListeners() {
             UI.checkoutButton.addEventListener('click', showTransferScreen);
