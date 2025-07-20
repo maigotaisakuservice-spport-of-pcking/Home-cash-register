@@ -21,7 +21,6 @@
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
-        /* カメラ映像を左右反転させる */
         #reader video {
             width: 100% !important;
             height: auto !important;
@@ -85,7 +84,21 @@
 
         <!-- ===== 支払い画面 ===== -->
         <div id="payment-screen" class="hidden">
-            <!-- ... (変更なし) ... -->
+            <header class="p-4 bg-gray-50 border-b"><h1 class="text-xl font-bold text-center text-gray-800">お支払い確認</h1></header>
+            <main class="p-4">
+                <h2 class="text-lg font-semibold text-gray-700">購入商品リスト</h2>
+                <div id="final-cart-items" class="mt-2 space-y-2 max-h-60 overflow-y-auto"></div>
+            </main>
+            <footer class="p-4 bg-gray-50 border-t">
+                 <div class="flex justify-between items-center mb-4">
+                    <span class="text-lg font-semibold text-gray-600">お支払い金額</span>
+                    <span id="final-total-price" class="text-2xl font-bold text-gray-900">0円</span>
+                </div>
+                <button id="payment-complete-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all">支払い完了</button>
+                 <button id="back-to-main-button" class="w-full mt-2 bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-all">
+                    買い物を続ける
+                </button>
+            </footer>
         </div>
         
         <!-- ===== 手動追加モーダル ===== -->
@@ -114,6 +127,15 @@
                 </form>
             </div>
         </div>
+        
+        <!-- ===== アプリ内通知 ===== -->
+        <div id="notification-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900" id="notification-title">お知らせ</h3>
+                <div class="mt-2"><p class="text-sm text-gray-500" id="notification-message"></p></div>
+                <div class="mt-5"><button id="notification-ok-button" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700">OK</button></div>
+            </div>
+        </div>
     </div>
 
     <!-- Firebase SDKs -->
@@ -133,6 +155,9 @@
         let db;
         let html5QrcodeScanner;
         let cart = []; // { id, name, price, quantity }
+        const LOW_STOCK_THRESHOLD = 1;
+        
+        // --- UI要素の参照をすべて定義 ---
         const UI = {
             mainScreen: document.getElementById('main-screen'),
             paymentScreen: document.getElementById('payment-screen'),
@@ -145,6 +170,14 @@
             manualAddModal: document.getElementById('manual-add-modal'),
             manualAddForm: document.getElementById('manual-add-form'),
             cancelManualAdd: document.getElementById('cancel-manual-add'),
+            finalCartItems: document.getElementById('final-cart-items'),
+            finalTotalPrice: document.getElementById('final-total-price'),
+            paymentCompleteButton: document.getElementById('payment-complete-button'),
+            backToMainButton: document.getElementById('back-to-main-button'),
+            notificationModal: document.getElementById('notification-modal'),
+            notificationTitle: document.getElementById('notification-title'),
+            notificationMessage: document.getElementById('notification-message'),
+            notificationOkButton: document.getElementById('notification-ok-button'),
         };
 
         document.addEventListener('DOMContentLoaded', init);
@@ -178,10 +211,15 @@
             html5QrcodeScanner.render(onScanSuccess, onScanFailure);
         }
 
+        // --- すべてのイベントリスナーをここで設定 ---
         function setupEventListeners() {
             UI.manualAddButton.addEventListener('click', () => UI.manualAddModal.classList.remove('hidden'));
             UI.cancelManualAdd.addEventListener('click', () => UI.manualAddModal.classList.add('hidden'));
             UI.manualAddForm.addEventListener('submit', handleManualAdd);
+            UI.checkoutButton.addEventListener('click', showPaymentScreen);
+            UI.paymentCompleteButton.addEventListener('click', handlePaymentCompletion);
+            UI.backToMainButton.addEventListener('click', showMainScreen);
+            UI.notificationOkButton.addEventListener('click', () => UI.notificationModal.classList.add('hidden'));
         }
         
         function onScanSuccess(decodedText, decodedResult) {
@@ -219,16 +257,12 @@
 
         async function findProduct(janCode) {
             updateScanStatus(`${janCode} を検索中...`, 'blue');
-            
-            // カート内に既に同じ商品があれば、数量を増やす
             const existingItem = cart.find(item => item.id === janCode);
             if (existingItem) {
                 addToCart(existingItem, 1);
                 updateScanStatus(`${existingItem.name} の数量を追加しました`, 'green');
                 return;
             }
-
-            // DBから商品を検索
             const productRef = doc(db, "products", janCode);
             try {
                 const docSnap = await getDoc(productRef);
@@ -246,7 +280,7 @@
         }
 
         async function fetchProductFromApi(janCode) {
-            // (この関数の中身は変更なし)
+            // この関数は変更なし
         }
 
         function handleManualAdd(event) {
@@ -256,16 +290,11 @@
             const quantity = parseInt(document.getElementById('product-quantity').value, 10);
 
             if (name && price > 0 && quantity > 0) {
-                const manualProduct = {
-                    id: `manual_${Date.now()}`, // 手動商品はユニークIDを生成
-                    name: name,
-                    price: price,
-                    isManual: true // 手動追加フラグ
-                };
+                const manualProduct = { id: `manual_${Date.now()}`, name: name, price: price, isManual: true };
                 addToCart(manualProduct, quantity);
                 UI.manualAddModal.classList.add('hidden');
                 UI.manualAddForm.reset();
-                document.getElementById('product-quantity').value = 1; // 数量を1にリセット
+                document.getElementById('product-quantity').value = 1;
             } else {
                 alert('商品名、価格、数量を正しく入力してください。');
             }
@@ -295,36 +324,79 @@
                             <span class="font-medium text-gray-800">${item.name}</span>
                             <span class="text-sm text-gray-500 ml-2">${item.quantity}点 × ${item.price}円</span>
                         </div>
-                        <span class="font-semibold text-gray-900">${subtotal}円</span>
+                        <span class="font-semibold text-gray-900">${subtotal.toLocaleString()}円</span>
                     </div>`;
                 }).join('');
             }
             const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-            UI.totalPrice.textContent = `${totalPrice}円`;
+            UI.totalPrice.textContent = `${totalPrice.toLocaleString()}円`;
         }
         
+        function resetCart() {
+            cart = [];
+            updateCartUI();
+        }
+
+        function showPaymentScreen() {
+            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            UI.finalTotalPrice.textContent = `${totalPrice.toLocaleString()}円`;
+            UI.finalCartItems.innerHTML = UI.cartItems.innerHTML; // 表示をコピー
+            UI.mainScreen.classList.add('hidden');
+            UI.paymentScreen.classList.remove('hidden');
+        }
+
+        function showMainScreen() {
+            UI.paymentScreen.classList.add('hidden');
+            UI.mainScreen.classList.remove('hidden');
+        }
+
+        async function handlePaymentCompletion() {
+            UI.paymentCompleteButton.disabled = true;
+            UI.paymentCompleteButton.textContent = '処理中...';
+            await finalizePurchase();
+            showNotification('支払い完了', 'ありがとうございました！');
+            resetCart();
+            showMainScreen();
+            UI.paymentCompleteButton.disabled = false;
+            UI.paymentCompleteButton.textContent = '支払い完了';
+        }
+
+        async function finalizePurchase() {
+            const lowStockItems = [];
+            try {
+                await runTransaction(db, async (transaction) => {
+                    for (const item of cart) {
+                        // 手動で追加した商品は在庫管理の対象外
+                        if (item.isManual) continue;
+
+                        const inventoryRef = doc(db, "inventory", item.id);
+                        const inventoryDoc = await transaction.get(inventoryRef);
+                        if (inventoryDoc.exists()) {
+                            const newQuantity = inventoryDoc.data().quantity - item.quantity;
+                            transaction.update(inventoryRef, { quantity: newQuantity });
+                            if (newQuantity < LOW_STOCK_THRESHOLD) {
+                                lowStockItems.push(item.name);
+                            }
+                        }
+                    }
+                });
+                if (lowStockItems.length > 0) {
+                    showNotification('在庫アラート', `${lowStockItems.join('、')} の在庫が少なくなっています。`);
+                }
+            } catch (error) {
+                console.error("会計処理エラー:", error);
+                showNotification('エラー', '会計処理中にエラーが発生しました。');
+            }
+        }
+        
+        function showNotification(title, message) {
+            UI.notificationTitle.textContent = title;
+            UI.notificationMessage.textContent = message;
+            UI.notificationModal.classList.remove('hidden');
+        }
+
         function speak(text) {
             if ('speechSynthesis' in window) {
                 speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'ja-JP';
-                speechSynthesis.speak(utterance);
-            }
-        }
-
-        function updateScanStatus(message, color) {
-            UI.scanStatus.textContent = message;
-            const colors = { blue: 'text-blue-600', green: 'text-green-600', yellow: 'text-yellow-600', red: 'text-red-600', gray: 'text-gray-500' };
-            UI.scanStatus.className = `text-center text-sm mt-2 font-medium ${colors[color] || colors.gray}`;
-            if (color !== 'gray') {
-                setTimeout(() => updateScanStatus('カメラをバーコードにかざしてください', 'gray'), 3000);
-            }
-        }
-        
-        // 他の関数 (resetCart, finalizePurchase, showNotification, etc.) は
-        // 新しいカートの構造 (特に数量) に合わせて適切に動作する必要があります。
-        // ここでは主要なロジックの変更に焦点を当てています。
-    </script>
-</body>
-</html>
-
+                utterance.lang = 'ja-J
