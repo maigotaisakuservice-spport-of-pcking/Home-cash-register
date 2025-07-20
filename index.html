@@ -21,18 +21,15 @@
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
             -webkit-tap-highlight-color: transparent; /* スマホでのタップ時のハイライトを無効化 */
         }
-        /* スキャナーのビデオ要素がコンテナに収まるように調整 */
         #reader video {
             width: 100% !important;
             height: auto !important;
             border-radius: 0.5rem;
-            transform: scaleX(-1); /* 鏡のように反転表示 */
+            transform: scaleX(-1);
         }
-        /* スキャン領域の枠線も角丸に */
         #reader div[style*="border"] {
             border-radius: 0.5rem;
         }
-        /* エラーメッセージ用のスタイル */
         .camera-error-message {
             display: flex;
             flex-direction: column;
@@ -40,8 +37,8 @@
             justify-content: center;
             padding: 1rem;
             text-align: center;
-            color: #991b1b; /* text-red-800 */
-            background-color: #fee2e2; /* bg-red-100 */
+            color: #991b1b;
+            background-color: #fee2e2;
             border-radius: 0.5rem;
             height: 100%;
         }
@@ -58,13 +55,11 @@
             </header>
 
             <main class="p-4">
-                <!-- カメラ映像とエラー表示エリア -->
                 <div id="reader" class="bg-gray-200 rounded-lg overflow-hidden shadow-inner min-h-[250px] flex items-center justify-center p-4">
                     <div class="text-center text-gray-500">カメラを初期化しています...</div>
                 </div>
                 <p id="scan-status" class="text-center text-sm text-gray-500 mt-2">カメラをバーコードにかざしてください</p>
 
-                <!-- 買い物カゴ -->
                 <div class="mt-6">
                     <h2 class="text-lg font-semibold text-gray-700">買い物カゴ</h2>
                     <div id="cart-items" class="mt-2 space-y-2">
@@ -119,7 +114,6 @@
         import { getFirestore, doc, getDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Configuration ---
-        // 実際のアプリでは、この設定を安全な方法で管理してください。
         const firebaseConfig = {
             apiKey: "AIzaSyB-5Uze-PSCq-IhnORPNATodPcc3mmlFGo",
             authDomain: "home-cash-register.firebaseapp.com",
@@ -156,20 +150,13 @@
 
         async function init() {
             try {
-                // 1. HTTPS接続を強制
                 if (location.protocol !== 'https:') {
                     throw new Error("カメラ機能には安全な接続(HTTPS)が必要です。");
                 }
-
-                // 2. Firebaseを初期化
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
-
-                // 3. スキャナーを初期化して起動
                 setupScanner();
-                
                 updateCartUI();
-
             } catch (error) {
                 console.error("初期化エラー:", error);
                 displayCameraError(error.message);
@@ -179,36 +166,43 @@
 
         /**
          * html5-qrcodeスキャナーをセットアップし、スキャンを開始する
+         * [変更点] formatsToSupport を追加して読み取り対象をバーコードに限定
          */
         function setupScanner() {
+            // スキャン対象とするバーコードの形式を定義します。
+            // 日本で一般的なJANコード(EAN_13)と短縮JANコード(EAN_8)に絞ります。
+            const formatsToSupport = [
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.UPC_E
+            ];
+
             html5QrcodeScanner = new Html5QrcodeScanner(
                 "reader", 
                 {
                     fps: 10,
                     qrbox: (viewfinderWidth, viewfinderHeight) => {
                         const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-                        const qrboxSize = Math.floor(minEdge * 0.8);
-                        return { width: qrboxSize, height: qrboxSize };
+                        return { 
+                            width: Math.floor(minEdge * 0.9), // 横幅を広めに
+                            height: Math.floor(minEdge * 0.4) // 高さを狭めに
+                        };
                     },
-                    facingMode: "environment", // 背面カメラを使用
-                    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+                    facingMode: "environment",
+                    supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+                    // ★★★ この設定でスキャナーをバーコード専用にします ★★★
+                    formatsToSupport: formatsToSupport 
                 },
                 /* verbose= */ false
             );
             html5QrcodeScanner.render(onScanSuccess, onScanFailure);
         }
         
-        /**
-         * バーコードスキャン成功時のコールバック
-         * @param {string} decodedText - デコードされたバーコードの文字列
-         * @param {object} decodedResult - デコード結果の詳細オブジェクト
-         */
         function onScanSuccess(decodedText, decodedResult) {
-            // スキャン成功時に一瞬スキャナを停止し、処理の重複を防ぐ
             html5QrcodeScanner.pause();
             findProduct(decodedText)
                 .finally(() => {
-                    // 1秒後にスキャンを再開
                     setTimeout(() => {
                         if (html5QrcodeScanner.getState() === Html5QrcodeScannerState.PAUSED) {
                             html5QrcodeScanner.resume();
@@ -217,28 +211,15 @@
                 });
         }
 
-        /**
-         * バーコードスキャン失敗時のコールバック（カメラエラーを含む）
-         * @param {any} error - エラー情報
-         */
         function onScanFailure(error) {
-            // このコールバックはスキャンが成功しなかったフレームごとに呼ばれるため、
-            // コンソールへのログ出力はコメントアウトしておく。
-            // console.warn(`Code scan error = ${error}`);
-            
-            // カメラのパーミッションエラーなどをここでハンドリングする
             handleCameraError(error);
         }
 
-        /**
-         * カメラ関連のエラーを解析し、ユーザーフレンドリーなメッセージを表示する
-         * @param {any} error - エラーオブジェクトまたは文字列
-         */
         function handleCameraError(error) {
             let message = "スキャナーで不明なエラーが発生しました。ページを再読み込みしてください。";
             const errorStr = typeof error === 'string' ? error : error.name || error.message;
 
-            if (!errorStr) return; // エラー情報がなければ何もしない
+            if (!errorStr) return;
 
             if (errorStr.includes("NotAllowedError") || errorStr.includes("Permission denied")) {
                 message = "カメラへのアクセスが拒否されました。ブラウザの設定を確認し、このサイトにカメラのアクセスを許可してください。";
@@ -250,20 +231,14 @@
                 message = "お使いのカメラはこのアプリが要求する仕様（解像度など）を満たしていません。";
             }
             
-            // 永続的なエラー（許可がないなど）の場合のみメッセージを表示
             if (errorStr.includes("NotAllowedError") || errorStr.includes("NotFoundError") || errorStr.includes("NotReadableError")) {
                 displayCameraError(message);
-                // スキャナをクリアして再試行を防ぐ
                 if (html5QrcodeScanner && html5QrcodeScanner.getState() !== Html5QrcodeScannerState.NOT_STARTED) {
                     html5QrcodeScanner.clear().catch(err => console.error("スキャナのクリアに失敗", err));
                 }
             }
         }
 
-        /**
-         * カメラエラーメッセージをUIに表示する
-         * @param {string} message - 表示するメッセージ
-         */
         function displayCameraError(message) {
             UI.reader.innerHTML = `<div class="camera-error-message">
                 <svg class="w-12 h-12 mb-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -304,7 +279,6 @@
 
         async function fetchProductFromApi(janCode) {
             try {
-                // Open Food Facts APIを利用
                 const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${janCode}`);
                 if (!response.ok) throw new Error('API request failed');
                 
@@ -362,7 +336,7 @@
 
         function speak(text) {
             if ('speechSynthesis' in window) {
-                speechSynthesis.cancel(); // 連続読み上げ時に前のをキャンセル
+                speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'ja-JP';
                 speechSynthesis.speak(utterance);
