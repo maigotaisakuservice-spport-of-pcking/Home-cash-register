@@ -138,3 +138,304 @@
 
     <!-- Firebase SDKs -->
     <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB-5Uze-PSCq-IhnORPNATodPcc3mmlFGo",
+            authDomain: "home-cash-register.firebaseapp.com",
+            projectId: "home-cash-register",
+            storageBucket: "home-cash-register.appspot.com",
+            messagingSenderId: "741709382656",
+            appId: "1:741709382656:web:e5319982361b053800c4e5"
+        };
+        
+        let db;
+        let html5QrcodeScanner;
+        let cart = [];
+        const LOW_STOCK_THRESHOLD = 1;
+        
+        const UI = {
+            mainScreen: document.getElementById('main-screen'),
+            paymentScreen: document.getElementById('payment-screen'),
+            cartItems: document.getElementById('cart-items'),
+            totalPrice: document.getElementById('total-price'),
+            checkoutButton: document.getElementById('checkout-button'),
+            scanStatus: document.getElementById('scan-status'),
+            reader: document.getElementById('reader'),
+            manualAddButton: document.getElementById('manual-add-button'),
+            manualAddModal: document.getElementById('manual-add-modal'),
+            manualAddForm: document.getElementById('manual-add-form'),
+            cancelManualAdd: document.getElementById('cancel-manual-add'),
+            finalCartItems: document.getElementById('final-cart-items'),
+            finalTotalPrice: document.getElementById('final-total-price'),
+            paymentCompleteButton: document.getElementById('payment-complete-button'),
+            backToMainButton: document.getElementById('back-to-main-button'),
+            notificationModal: document.getElementById('notification-modal'),
+            notificationTitle: document.getElementById('notification-title'),
+            notificationMessage: document.getElementById('notification-message'),
+            notificationOkButton: document.getElementById('notification-ok-button'),
+        };
+
+        document.addEventListener('DOMContentLoaded', init);
+
+        async function init() {
+            try {
+                if (location.protocol !== 'https:') {
+                    throw new Error("カメラ機能には安全な接続(HTTPS)が必要です。");
+                }
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                setupScanner();
+                setupEventListeners();
+                updateCartUI();
+            } catch (error) {
+                console.error("初期化エラー:", error);
+                displayCameraError(error.message);
+                UI.checkoutButton.disabled = true;
+            }
+        }
+
+        function setupScanner() {
+            const formatsToSupport = [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8];
+            html5QrcodeScanner = new Html5QrcodeScanner("reader", {
+                fps: 10,
+                qrbox: (w, h) => ({ width: Math.floor(w * 0.9), height: Math.floor(h * 0.4) }),
+                facingMode: "environment",
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+                formatsToSupport: formatsToSupport
+            }, false);
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        function setupEventListeners() {
+            UI.manualAddButton.addEventListener('click', () => UI.manualAddModal.classList.remove('hidden'));
+            UI.cancelManualAdd.addEventListener('click', () => UI.manualAddModal.classList.add('hidden'));
+            UI.manualAddForm.addEventListener('submit', handleManualAdd);
+            UI.checkoutButton.addEventListener('click', showPaymentScreen);
+            UI.paymentCompleteButton.addEventListener('click', handlePaymentCompletion);
+            UI.backToMainButton.addEventListener('click', showMainScreen);
+            UI.notificationOkButton.addEventListener('click', () => UI.notificationModal.classList.add('hidden'));
+        }
+        
+        function onScanSuccess(decodedText) {
+            if (html5QrcodeScanner.getState() !== Html5QrcodeScannerState.SCANNING) return;
+            html5QrcodeScanner.pause();
+            findProduct(decodedText).finally(() => {
+                setTimeout(() => {
+                    if (html5QrcodeScanner?.getState() === Html5QrcodeScannerState.PAUSED) {
+                        html5QrcodeScanner.resume();
+                    }
+                }, 1000);
+            });
+        }
+
+        function onScanFailure(error) { handleCameraError(error); }
+
+        function handleCameraError(error) {
+            let message = "スキャナーで不明なエラーが発生しました。";
+            const errorStr = typeof error === 'string' ? error : error.name || error.message;
+            if (!errorStr || errorStr.toLowerCase().includes("not found")) return;
+
+            if (errorStr.includes("NotAllowedError")) message = "カメラへのアクセスが拒否されました。ブラウザの設定で許可してください。";
+            else if (errorStr.includes("NotFoundError")) message = "利用可能なカメラが見つかりませんでした。";
+            else if (errorStr.includes("NotReadableError")) message = "カメラを起動できませんでした。他のアプリで使用されている可能性があります。";
+            
+            displayCameraError(message);
+            html5QrcodeScanner?.clear().catch(err => console.error("スキャナのクリアに失敗", err));
+        }
+
+        function displayCameraError(message) {
+            UI.reader.innerHTML = `<div class="camera-error-message"><p class="font-semibold">カメラエラー</p><p class="text-sm mt-1">${message}</p></div>`;
+            UI.scanStatus.textContent = "スキャナーを開始できませんでした。";
+            UI.scanStatus.className = 'text-center text-sm mt-2 font-medium text-red-600';
+        }
+
+        async function findProduct(janCode) {
+            updateScanStatus(`${janCode} を検索中...`, 'blue');
+            const existingItem = cart.find(item => item.id === janCode);
+            if (existingItem) {
+                addToCart(existingItem, 1);
+                updateScanStatus(`${existingItem.name} の数量を追加しました`, 'green');
+                return;
+            }
+            const productRef = doc(db, "products", janCode);
+            try {
+                const docSnap = await getDoc(productRef);
+                if (docSnap.exists()) {
+                    const productData = { ...docSnap.data(), id: janCode };
+                    addToCart(productData, 1);
+                    updateScanStatus(`${productData.name} を追加しました`, 'green');
+                } else {
+                    await fetchProductFromApi(janCode);
+                }
+            } catch (error) {
+                console.error("商品検索エラー:", error);
+                updateScanStatus('商品検索中にエラーが発生', 'red');
+            }
+        }
+
+        async function fetchProductFromApi(janCode) {
+            updateScanStatus(`商品情報を検索中...`, 'blue');
+            try {
+                const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${janCode}`);
+                if (!response.ok) throw new Error('API request failed');
+                const data = await response.json();
+
+                if (data.status === 1 && data.product) {
+                    const productName = data.product.product_name_ja || data.product.product_name || "名称不明";
+                    const priceInput = prompt(`${productName}\n\nこの商品の価格(円)を入力してください:`, "100");
+                    const price = parseInt(priceInput, 10);
+
+                    if (!isNaN(price) && price > 0) {
+                        const newProduct = { name: productName, price, imageUrl: data.product.image_front_url || null };
+                        await setDoc(doc(db, "products", janCode), newProduct);
+                        await setDoc(doc(db, "inventory", janCode), { name: newProduct.name, quantity: 1 });
+                        addToCart({ ...newProduct, id: janCode }, 1);
+                        updateScanStatus(`${newProduct.name} を新規登録・追加しました`, 'green');
+                    } else {
+                        updateScanStatus('登録をキャンセルしました', 'yellow');
+                    }
+                } else {
+                    updateScanStatus(`商品情報が見つかりません (JAN: ${janCode})`, 'red');
+                }
+            } catch (error) {
+                console.error("API fetch error:", error);
+                updateScanStatus('外部APIへの接続エラー', 'red');
+            }
+        }
+
+        function handleManualAdd(event) {
+            event.preventDefault();
+            const name = UI.manualAddForm.querySelector('#product-name').value;
+            const price = parseInt(UI.manualAddForm.querySelector('#product-price').value, 10);
+            const quantity = parseInt(UI.manualAddForm.querySelector('#product-quantity').value, 10);
+
+            if (name && price > 0 && quantity > 0) {
+                const manualProduct = { id: `manual_${Date.now()}`, name, price, isManual: true };
+                addToCart(manualProduct, quantity);
+                UI.manualAddModal.classList.add('hidden');
+                UI.manualAddForm.reset();
+                UI.manualAddForm.querySelector('#product-quantity').value = 1;
+            } else {
+                alert('商品名、価格、数量を正しく入力してください。');
+            }
+        }
+
+        function addToCart(product, quantity) {
+            const existingItem = cart.find(item => item.id === product.id);
+            if (existingItem) {
+                existingItem.quantity += quantity;
+            } else {
+                cart.push({ ...product, quantity: quantity });
+            }
+            updateCartUI();
+            speak(`${product.name}、${quantity}点、カゴに追加しました`);
+        }
+
+        function updateCartUI() {
+            UI.checkoutButton.disabled = cart.length === 0;
+            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            UI.totalPrice.textContent = `${totalPrice.toLocaleString()}円`;
+
+            if (cart.length === 0) {
+                UI.cartItems.innerHTML = '<p class="text-gray-500">商品はここに表示されます。</p>';
+                return;
+            }
+            
+            UI.cartItems.innerHTML = cart.map(item => {
+                const subtotal = item.price * item.quantity;
+                return `
+                <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
+                    <div>
+                        <span class="font-medium text-gray-800">${item.name}</span>
+                        <span class="text-sm text-gray-500 ml-2">${item.quantity}点 × ${item.price.toLocaleString()}円</span>
+                    </div>
+                    <span class="font-semibold text-gray-900">${subtotal.toLocaleString()}円</span>
+                </div>`;
+            }).join('');
+        }
+        
+        function resetCart() {
+            cart = [];
+            updateCartUI();
+        }
+
+        function showPaymentScreen() {
+            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            UI.finalTotalPrice.textContent = `${totalPrice.toLocaleString()}円`;
+            UI.finalCartItems.innerHTML = UI.cartItems.innerHTML;
+            UI.mainScreen.classList.add('hidden');
+            UI.paymentScreen.classList.remove('hidden');
+        }
+
+        function showMainScreen() {
+            UI.paymentScreen.classList.add('hidden');
+            UI.mainScreen.classList.remove('hidden');
+        }
+
+        async function handlePaymentCompletion() {
+            UI.paymentCompleteButton.disabled = true;
+            UI.paymentCompleteButton.textContent = '処理中...';
+            await finalizePurchase();
+            showNotification('支払い完了', 'ありがとうございました！');
+            resetCart();
+            showMainScreen();
+            UI.paymentCompleteButton.disabled = false;
+            UI.paymentCompleteButton.textContent = '支払い完了';
+        }
+
+        async function finalizePurchase() {
+            const lowStockItems = [];
+            try {
+                await runTransaction(db, async (transaction) => {
+                    for (const item of cart) {
+                        if (item.isManual) continue;
+                        const inventoryRef = doc(db, "inventory", item.id);
+                        const inventoryDoc = await transaction.get(inventoryRef);
+                        if (inventoryDoc.exists()) {
+                            const newQuantity = inventoryDoc.data().quantity - item.quantity;
+                            transaction.update(inventoryRef, { quantity: newQuantity });
+                            if (newQuantity <= LOW_STOCK_THRESHOLD) {
+                                lowStockItems.push(item.name);
+                            }
+                        }
+                    }
+                });
+                if (lowStockItems.length > 0) {
+                    setTimeout(() => {
+                        showNotification('在庫アラート', `${lowStockItems.join('、')} の在庫が少なくなっています。`);
+                    }, 1000); // 支払い完了通知の後に表示
+                }
+            } catch (error) {
+                console.error("会計処理エラー:", error);
+                showNotification('エラー', '会計処理中にエラーが発生しました。');
+            }
+        }
+        
+        function showNotification(title, message) {
+            UI.notificationTitle.textContent = title;
+            UI.notificationMessage.textContent = message;
+            UI.notificationModal.classList.remove('hidden');
+        }
+
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ja-JP';
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        function updateScanStatus(message, color) {
+            UI.scanStatus.textContent = message;
+            const colors = { blue: 'text-blue-600', green: 'text-green-600', yellow: 'text-yellow-600', red: 'text-red-600', gray: 'text-gray-500' };
+            UI.scanStatus.className = `text-center text-sm mt-2 font-medium ${colors[color] || colors.gray}`;
+            if (color !== 'gray') {
+                setTimeout(() => updateScanStatus('カメラをバーコードにかざしてください', 'gray'), 3000);
+            }
+        }
+    </script>
+</body>
+</html>
