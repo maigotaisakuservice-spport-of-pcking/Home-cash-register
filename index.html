@@ -5,32 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>お家レジゴー</title>
     
-    <!-- Tailwind CSS for styling -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Google Fonts: Inter for a clean look -->
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     
-    <!-- html5-qrcode library for barcode scanning -->
+    <!-- Barcode Scanner Library -->
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <style>
         body {
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
-            -webkit-tap-highlight-color: transparent;
+            -webkit-tap-highlight-color: transparent; /* スマホでのタップ時のハイライトを無効化 */
         }
+        /* スキャナーのビデオ要素がコンテナに収まるように調整 */
         #reader video {
             width: 100% !important;
             height: auto !important;
             border-radius: 0.5rem;
         }
+        /* スキャン領域の枠線も角丸に */
         #reader div[style*="border"] {
             border-radius: 0.5rem;
-        }
-        .transition-all {
-            transition: all 0.3s ease-in-out;
         }
     </style>
 </head>
@@ -38,18 +37,20 @@
 
     <div class="w-full max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
 
-        <!-- ===== Main Scanning Screen (Always Visible) ===== -->
+        <!-- ===== メイン画面 ===== -->
         <div id="main-screen">
             <header class="p-4 bg-gray-50 border-b">
                 <h1 class="text-xl font-bold text-center text-gray-800">お家レジゴー</h1>
             </header>
 
             <main class="p-4">
-                <div id="reader" class="bg-gray-200 rounded-lg overflow-hidden shadow-inner">
-                    <!-- Scanner will be rendered here -->
+                <!-- カメラ映像とエラー表示エリア -->
+                <div id="reader" class="bg-gray-200 rounded-lg overflow-hidden shadow-inner min-h-[200px] flex items-center justify-center p-4">
+                    <!-- JavaScriptによってカメラ映像またはエラーメッセージが表示されます -->
                 </div>
                 <p id="scan-status" class="text-center text-sm text-gray-500 mt-2">カメラをバーコードにかざしてください</p>
 
+                <!-- 買い物カゴ -->
                 <div class="mt-6">
                     <h2 class="text-lg font-semibold text-gray-700">買い物カゴ</h2>
                     <div id="cart-items" class="mt-2 space-y-2">
@@ -59,9 +60,7 @@
             </main>
 
             <footer class="p-4 bg-gray-50 border-t sticky bottom-0">
-                <!-- Error display area -->
                 <div id="error-display" class="text-red-600 text-center text-sm mb-2 font-medium"></div>
-
                 <div class="flex justify-between items-center mb-4">
                     <span class="text-lg font-semibold text-gray-600">合計金額</span>
                     <span id="total-price" class="text-2xl font-bold text-gray-900">0円</span>
@@ -72,108 +71,102 @@
             </footer>
         </div>
 
-        <!-- ===== Payment Screen ===== -->
+        <!-- ===== 支払い画面 ===== -->
         <div id="payment-screen" class="hidden">
-            <header class="p-4 bg-gray-50 border-b">
-                <h1 class="text-xl font-bold text-center text-gray-800">お支払い確認</h1>
-            </header>
-            
+            <header class="p-4 bg-gray-50 border-b"><h1 class="text-xl font-bold text-center text-gray-800">お支払い確認</h1></header>
             <main class="p-4">
                 <h2 class="text-lg font-semibold text-gray-700">購入商品リスト</h2>
                 <div id="final-cart-items" class="mt-2 space-y-2 max-h-60 overflow-y-auto"></div>
             </main>
-
             <footer class="p-4 bg-gray-50 border-t">
                  <div class="flex justify-between items-center mb-4">
                     <span class="text-lg font-semibold text-gray-600">お支払い金額</span>
                     <span id="final-total-price" class="text-2xl font-bold text-gray-900">0円</span>
                 </div>
-                <button id="payment-complete-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all">
-                    支払い完了
-                </button>
+                <button id="payment-complete-button" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all">支払い完了</button>
             </footer>
         </div>
         
-        <!-- ===== In-App Notification Modal ===== -->
+        <!-- ===== アプリ内通知 ===== -->
         <div id="notification-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm text-center">
                 <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100">
-                    <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
+                    <svg class="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                 </div>
                 <h3 class="text-lg leading-6 font-medium text-gray-900 mt-4" id="notification-title">在庫アラート</h3>
-                <div class="mt-2">
-                    <p class="text-sm text-gray-500" id="notification-message"></p>
-                </div>
-                <div class="mt-5">
-                    <button id="notification-ok-button" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm">
-                        OK
-                    </button>
-                </div>
+                <div class="mt-2"><p class="text-sm text-gray-500" id="notification-message"></p></div>
+                <div class="mt-5"><button id="notification-ok-button" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm">OK</button></div>
             </div>
         </div>
     </div>
 
     <!-- Firebase SDKs -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, getDoc, setDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // =================================================================================
-        // TODO: ↓↓↓ あなたのFirebaseプロジェクトの設定に書き換えてください ↓↓↓
-        // =================================================================================
+        // --- Firebase Configuration ---
         const firebaseConfig = {
             apiKey: "AIzaSyB-5Uze-PSCq-IhnORPNATodPcc3mmlFGo",
             authDomain: "home-cash-register.firebaseapp.com",
             projectId: "home-cash-register",
-            storageBucket: "home-cash-register.firebasestorage.app",
+            storageBucket: "home-cash-register.appspot.com",
             messagingSenderId: "741709382656",
             appId: "1:741709382656:web:e5319982361b053800c4e5"
         };
-        // =================================================================================
         
-        // --- Global State ---
+        // --- Global State & UI Elements ---
         let db;
         let cart = [];
         let totalPrice = 0;
         const LOW_STOCK_THRESHOLD = 1;
+        const UI = {
+            mainScreen: document.getElementById('main-screen'),
+            paymentScreen: document.getElementById('payment-screen'),
+            cartItems: document.getElementById('cart-items'),
+            totalPrice: document.getElementById('total-price'),
+            checkoutButton: document.getElementById('checkout-button'),
+            paymentCompleteButton: document.getElementById('payment-complete-button'),
+            finalCartItems: document.getElementById('final-cart-items'),
+            finalTotalPrice: document.getElementById('final-total-price'),
+            scanStatus: document.getElementById('scan-status'),
+            notificationModal: document.getElementById('notification-modal'),
+            notificationMessage: document.getElementById('notification-message'),
+            notificationOkButton: document.getElementById('notification-ok-button'),
+            errorDisplay: document.getElementById('error-display'),
+            reader: document.getElementById('reader')
+        };
 
-        // --- UI Elements ---
-        const mainScreen = document.getElementById('main-screen');
-        const paymentScreen = document.getElementById('payment-screen');
-        const cartItemsEl = document.getElementById('cart-items');
-        const totalPriceEl = document.getElementById('total-price');
-        const checkoutButton = document.getElementById('checkout-button');
-        const paymentCompleteButton = document.getElementById('payment-complete-button');
-        const finalCartItemsEl = document.getElementById('final-cart-items');
-        const finalTotalPriceEl = document.getElementById('final-total-price');
-        const scanStatusEl = document.getElementById('scan-status');
-        const notificationModal = document.getElementById('notification-modal');
-        const notificationMessage = document.getElementById('notification-message');
-        const notificationOkButton = document.getElementById('notification-ok-button');
-        const errorDisplay = document.getElementById('error-display');
-        const readerEl = document.getElementById('reader');
-
-        // --- Main App Logic ---
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeApp();
-        });
+        // --- Main Logic ---
+        document.addEventListener('DOMContentLoaded', initializeApp);
 
         async function initializeApp() {
             try {
-                if (firebaseConfig.apiKey === "YOUR_API_KEY" || !firebaseConfig.projectId) {
-                    throw new Error("Firebase設定が正しくありません。コードを編集してください。");
+                // 1. Check for HTTPS (CRITICAL for camera access on mobile)
+                if (location.protocol !== 'https:') {
+                    throw new Error("カメラを使うには安全な接続(HTTPS)が必要です。GitHub Pagesで公開してください。");
                 }
 
+                // 2. Check Firebase config
+                if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+                    throw new Error("Firebase設定が正しくありません。");
+                }
+
+                // 3. Initialize Firebase
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
 
+                // 4. Initialize Scanner
                 const html5QrcodeScanner = new Html5QrcodeScanner(
-                    "reader", {
+                    "reader", 
+                    {
                         fps: 10,
-                        qrbox: { width: 250, height: 150 },
-                        rememberLastUsedCamera: true,
+                        qrbox: (viewfinderWidth, viewfinderHeight) => {
+                            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                            const qrboxSize = Math.floor(minEdge * 0.7);
+                            return { width: qrboxSize, height: qrboxSize };
+                        },
+                        facingMode: "environment", // Use rear camera
                         supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
                     },
                     false
@@ -183,10 +176,9 @@
                 updateCartUI();
 
             } catch (error) {
-                console.error("Initialization failed:", error);
-                errorDisplay.innerHTML = `<strong>接続エラー:</strong> ${error.message}`;
-                readerEl.innerHTML = '<div class="p-4 text-center text-red-500">スキャナーを起動できませんでした。</div>';
-                checkoutButton.disabled = true;
+                console.error("初期化エラー:", error);
+                UI.reader.innerHTML = `<div class="text-center text-red-600 font-medium">${error.message}</div>`;
+                UI.checkoutButton.disabled = true;
             }
         }
         
@@ -213,7 +205,7 @@
                     await fetchProductFromApi(janCode);
                 }
             } catch (error) {
-                console.error("Error finding product:", error);
+                console.error("商品検索エラー:", error);
                 updateScanStatus('商品検索中にエラーが発生', 'red');
             }
         }
@@ -231,15 +223,9 @@
                     const price = parseInt(priceInput, 10);
 
                     if (!isNaN(price) && price > 0) {
-                        const newProduct = {
-                            name: productName,
-                            price: price,
-                            imageUrl: data.product.image_front_url || null
-                        };
-
+                        const newProduct = { name: productName, price, imageUrl: data.product.image_front_url || null };
                         await setDoc(doc(db, "products", janCode), newProduct);
                         await setDoc(doc(db, "inventory", janCode), { name: newProduct.name, quantity: 1 });
-                        
                         addToCart({ ...newProduct, janCode });
                         updateScanStatus(`${newProduct.name} を新規登録・追加しました`, 'green');
                     } else {
@@ -264,19 +250,18 @@
         }
 
         function updateCartUI() {
-            checkoutButton.disabled = cart.length === 0;
+            UI.checkoutButton.disabled = cart.length === 0;
             if (cart.length === 0) {
-                cartItemsEl.innerHTML = '<p class="text-gray-500">商品はここに表示されます。</p>';
+                UI.cartItems.innerHTML = '<p class="text-gray-500">商品はここに表示されます。</p>';
             } else {
-                cartItemsEl.innerHTML = cart.map(item => `
+                UI.cartItems.innerHTML = cart.map(item => `
                     <div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
                         <span class="font-medium text-gray-800">${item.name}</span>
                         <span class="font-semibold text-gray-900">${item.price}円</span>
-                    </div>
-                `).join('');
+                    </div>`).join('');
             }
             totalPrice = cart.reduce((sum, item) => sum + item.price, 0);
-            totalPriceEl.textContent = `${totalPrice}円`;
+            UI.totalPrice.textContent = `${totalPrice}円`;
         }
         
         function resetCart() {
@@ -303,40 +288,28 @@
                         if (inventoryDoc.exists()) {
                             const newQuantity = inventoryDoc.data().quantity - 1;
                             transaction.update(inventoryRef, { quantity: newQuantity });
-                            if (newQuantity < LOW_STOCK_THRESHOLD) {
-                                lowStockItems.push(item.name);
-                            }
+                            if (newQuantity < LOW_STOCK_THRESHOLD) lowStockItems.push(item.name);
                         }
                     }
                 });
-                if (lowStockItems.length > 0) {
-                    showNotification(`${lowStockItems.join('、')} の在庫が少なくなっています。`);
-                }
+                if (lowStockItems.length > 0) showNotification(`${lowStockItems.join('、')} の在庫が少なくなっています。`);
             } catch (error) {
-                console.error("Transaction failed: ", error);
+                console.error("会計処理エラー:", error);
                 alert("会計処理中にエラーが発生しました。");
             }
         }
         
         function showNotification(message) {
-            notificationMessage.textContent = message;
-            notificationModal.classList.remove('hidden');
+            UI.notificationMessage.textContent = message;
+            UI.notificationModal.classList.remove('hidden');
         }
 
         function updateScanStatus(message, color) {
-            scanStatusEl.textContent = message;
-            const colors = {
-                blue: 'text-blue-600',
-                green: 'text-green-600',
-                yellow: 'text-yellow-600',
-                red: 'text-red-600',
-                gray: 'text-gray-500'
-            };
-            scanStatusEl.className = `text-center text-sm mt-2 font-medium ${colors[color] || colors.gray}`;
+            UI.scanStatus.textContent = message;
+            const colors = { blue: 'text-blue-600', green: 'text-green-600', yellow: 'text-yellow-600', red: 'text-red-600', gray: 'text-gray-500' };
+            UI.scanStatus.className = `text-center text-sm mt-2 font-medium ${colors[color] || colors.gray}`;
             if (color !== 'gray') {
-                setTimeout(() => {
-                    updateScanStatus('カメラをバーコードにかざしてください', 'gray');
-                }, 2500);
+                setTimeout(() => updateScanStatus('カメラをバーコードにかざしてください', 'gray'), 2500);
             }
         }
 
@@ -345,36 +318,45 @@
         function onScanSuccess(decodedText, decodedResult) {
             if (!scanner) scanner = decodedResult.html5Qrcode;
             scanner.pause();
-            findProduct(decodedText).finally(() => {
-                setTimeout(() => {
-                    if (scanner) scanner.resume();
-                }, 1000);
-            });
+            findProduct(decodedText).finally(() => setTimeout(() => scanner?.resume(), 1000));
         }
 
-        function onScanError(errorMessage) { /* ignore */ }
+        function onScanError(error) {
+            // エラーメッセージを解析して、より分かりやすいフィードバックを表示
+            let message = "スキャナーで不明なエラーが発生しました。";
+            if (typeof error === 'string') {
+                if (error.includes("permission denied") || error.includes("NotAllowedError")) {
+                    message = "カメラへのアクセスが拒否されました。ブラウザの設定でカメラの許可をお願いします。";
+                } else if (error.includes("not found") || error.includes("NotFoundError")) {
+                    message = "使用できるカメラが見つかりません。";
+                }
+            }
+            console.error("Scan Error:", error);
+            UI.reader.innerHTML = `<div class="text-center text-red-600 font-medium">${message}</div>`;
+        }
 
-        checkoutButton.addEventListener('click', () => {
-            mainScreen.classList.add('hidden');
-            paymentScreen.classList.remove('hidden');
-            finalCartItemsEl.innerHTML = cartItemsEl.innerHTML;
-            finalTotalPriceEl.textContent = `${totalPrice}円`;
+        UI.checkoutButton.addEventListener('click', () => {
+            UI.mainScreen.classList.add('hidden');
+            UI.paymentScreen.classList.remove('hidden');
+            UI.finalCartItems.innerHTML = UI.cartItems.innerHTML;
+            UI.finalTotalPrice.textContent = `${totalPrice}円`;
         });
 
-        paymentCompleteButton.addEventListener('click', async () => {
-            paymentCompleteButton.disabled = true;
-            paymentCompleteButton.textContent = '処理中...';
+        UI.paymentCompleteButton.addEventListener('click', async () => {
+            UI.paymentCompleteButton.disabled = true;
+            UI.paymentCompleteButton.textContent = '処理中...';
             await finalizePurchase();
             resetCart();
-            paymentScreen.classList.add('hidden');
-            mainScreen.classList.remove('hidden');
-            paymentCompleteButton.disabled = false;
-            paymentCompleteButton.textContent = '支払い完了';
+            UI.paymentScreen.classList.add('hidden');
+            UI.mainScreen.classList.remove('hidden');
+            UI.paymentCompleteButton.disabled = false;
+            UI.paymentCompleteButton.textContent = '支払い完了';
         });
 
-        notificationOkButton.addEventListener('click', () => {
-            notificationModal.classList.add('hidden');
+        UI.notificationOkButton.addEventListener('click', () => {
+            UI.notificationModal.classList.add('hidden');
         });
     </script>
 </body>
 </html>
+
