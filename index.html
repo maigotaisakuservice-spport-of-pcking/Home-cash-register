@@ -367,4 +367,80 @@
             }
         }
 
-        // --- Helper Functions (Ba
+           // --- Helper Functions (Barcode Scanning, Cart, etc.) ---
+        // (The following functions are simplified for brevity but would be the same as the previous version)
+
+        function onScanSuccess(decodedText) {
+            if (html5QrcodeScanner.getState() !== Html5QrcodeScannerState.SCANNING) return;
+            html5QrcodeScanner.pause();
+            // Dummy product logic
+            const dummyProduct = {
+                id: decodedText,
+                name: `商品 ${decodedText.slice(-4)}`,
+                price: Math.floor(Math.random() * 500) + 50
+            };
+            addToCart(dummyProduct, 1);
+            updateScanStatus(`[${dummyProduct.name}] を追加しました`, 'green');
+            setTimeout(() => {
+                if (html5QrcodeScanner?.getState() === Html5QrcodeScannerState.PAUSED) {
+                    html5QrcodeScanner.resume();
+                }
+            }, 1500);
+        }
+
+        function onScanFailure(error) { /* Handle error silently or log it */ }
+
+        function displayCameraError(message) {
+            UI.reader.innerHTML = `<div class="camera-error-message"><p class="font-semibold">カメラエラー</p><p class="text-sm mt-1">${message}</p></div>`;
+            UI.scanStatus.textContent = "スキャナーを開始できませんでした。";
+        }
+        
+        function addToCart(product, quantity) {
+            const existingItem = cart.find(item => item.id === product.id);
+            if (existingItem) {
+                existingItem.quantity += quantity;
+            } else {
+                cart.push({ ...product, quantity: quantity });
+            }
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            UI.checkoutButton.disabled = cart.length === 0;
+            const totalPrice = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            UI.totalPrice.textContent = `${totalPrice.toLocaleString()}円`;
+
+            if (cart.length === 0) {
+                UI.cartItems.innerHTML = '<p class="text-gray-500 p-2">商品はここに表示されます。</p>';
+                return;
+            }
+            
+            UI.cartItems.innerHTML = cart.map(item => {
+                const subtotal = item.price * item.quantity;
+                return `<div class="flex items-center justify-between bg-gray-50 p-2 rounded-lg shadow-sm">
+                    <div><p class="font-medium text-gray-800">${item.name}</p><p class="text-sm text-gray-500 mt-1">${item.price.toLocaleString()}円 × ${item.quantity}点</p></div>
+                    <span class="font-semibold text-gray-900 ml-4">${subtotal.toLocaleString()}円</span>
+                </div>`;
+            }).join('');
+        }
+
+        function updateScanStatus(text, color) {
+            const colors = { green: 'text-green-600', red: 'text-red-600', blue: 'text-blue-600' };
+            UI.scanStatus.textContent = text;
+            UI.scanStatus.className = `text-center text-sm mt-2 h-5 font-medium ${colors[color] || 'text-gray-500'}`;
+            setTimeout(() => {
+                if (UI.scanStatus.textContent === text) {
+                    UI.scanStatus.textContent = 'カメラをバーコードにかざしてください';
+                    UI.scanStatus.className = 'text-center text-sm text-gray-500 mt-2 h-5';
+                }
+            }, 3000);
+        }
+        
+        function showNotification(title, message) {
+            // A simple alert for now, can be replaced with the modal
+            alert(`[${title}]\n\n${message}`);
+        }
+
+    </script>
+</body>
+</html>
